@@ -97,7 +97,7 @@ func screwModel() (sdf.SDF3, error) {
 	h := depth - bottomThickness
 	r := innerDiameter * 0.5
 	screw, err := sdf.Cone3D(h, 0.5, r, 0)
-	screw = sdf.Transform3D(screw, sdf.Translate3d(sdf.V3{0, 0, 0.5}))
+		screw = sdf.Transform3D(screw, sdf.Translate3d(sdf.V3{0, 0, 0.5}))
 	if err != nil {
 		return nil, err
 	}
