@@ -1,0 +1,24 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  default:
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
+
+  fd:
+    dir: cmd/fridgedrainer
+    cmds:
+      - go run .
+    silent: true
+
+  bp:
+    dir: cmd/BrabantiaPin
+    cmds:
+      - go run .
+    # silent: true
