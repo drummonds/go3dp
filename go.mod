@@ -3,7 +3,6 @@ module hum3/go3dp.git
 go 1.23.2
 
 require (
-	github.com/Yeicor/sdf-viewer-go v1.2.1
 	github.com/Yeicor/sdfx-ui v1.1.0
 	github.com/deadsy/sdfx v0.0.0-20241207221224-4203c70da4f6
 	github.com/hajimehoshi/ebiten v1.12.12
@@ -30,7 +29,6 @@ require (
 	github.com/hpinc/go3mf v0.24.2 // indirect
 	github.com/llgcode/draw2d v0.0.0-20240627062922-0ed1ff131195 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/ojrac/opensimplex-go v1.0.2 // indirect
 	github.com/qmuntal/opc v0.7.12 // indirect
 	github.com/subchen/go-trylock/v2 v2.0.0 // indirect
 	github.com/yofu/dxf v0.0.0-20240729034626-50c66fc03e0d // indirect
