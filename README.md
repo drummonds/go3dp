@@ -14,4 +14,3 @@ Soypat has retired his old SDF repo and replaced with [github.com/soypat/gsdf](h
 | Documentation | https://h3-go3dp.statichost.page/ |
 | Source (Codeberg) | https://codeberg.org/hum3/go3dp |
 | Mirror (GitHub) | https://github.com/drummonds/go3dp |
-| Docs repo | https://codeberg.org/hum3/go3dp-docs |

@@ -1,4 +1,4 @@
-module hum3/go3dp.git
+module codeberg.org/hum3/go3dp
 
 go 1.23.2
 
