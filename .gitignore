@@ -1,0 +1,16 @@
+# Generated documentation site
+/docs/
+cmd/*/docs/
+
+# Generated meshes / cutaways from CLI runs
+cmd/UniversalMount/*.stl
+cmd/UniversalMount/*.svg
+cmd/UniversalMount/*.3mf
+cmd/fasteners/*.3mf
+cmd/fasteners/*.svg
+
+# Go binaries built at repo root
+/UniversalMount
+/fasteners
+/BrabantiaPin
+/BoundaryWireInserter

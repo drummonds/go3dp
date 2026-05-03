@@ -1,0 +1,111 @@
+# Universal Mount — local tasks
+# Run from this directory, or via `task um:<name>` from the repo root.
+# https://taskfile.dev
+
+version: '3'
+
+tasks:
+  default:
+    desc: List available Universal Mount tasks
+    cmds:
+      - task --list-all
+    silent: true
+
+  v0:
+    desc: Build all v0 size variants (STL + SVG cutaways + 3MF)
+    cmds:
+      - go run . -size=all -out=all
+
+  v0:xs:
+    desc: Build v0-XS only (1 screw, 14 mm wide)
+    cmds:
+      - go run . -size=xs -out=all
+
+  v0:s:
+    desc: Build v0-S only (2 screws, 26 mm wide)
+    cmds:
+      - go run . -size=s -out=all
+
+  v0:m:
+    desc: Build v0-M only (3 screws triangle, 34 mm wide)
+    cmds:
+      - go run . -size=m -out=all
+
+  v0:l:
+    desc: Build v0-L only (3 screws triangle, 44 mm wide)
+    cmds:
+      - go run . -size=l -out=all
+
+  v0:stl:
+    desc: All sizes, STL only
+    cmds:
+      - go run . -size=all -out=stl
+
+  v0:svg:
+    desc: All sizes, SVG cutaways only
+    cmds:
+      - go run . -size=all -out=svg
+
+  v0:3mf:
+    desc: All sizes, 3MF only (browser preview)
+    cmds:
+      - go run . -size=all -out=3mf
+
+  v0:block:
+    desc: All sizes, block only (no cover)
+    cmds:
+      - go run . -size=all -part=block -out=all
+
+  v0:cover:
+    desc: All sizes, cover cap only
+    cmds:
+      - go run . -size=all -part=cover -out=all
+
+  v0:adaptor:
+    desc: All sizes, slide-on adaptor only (PLA tolerances)
+    cmds:
+      - go run . -size=all -part=adaptor -out=all
+
+  v1:
+    desc: Build all v1 artifacts (placeholder; not yet implemented)
+    cmds:
+      - echo "v1 (U-tube puck) not yet implemented — see README §2"
+    silent: true
+
+  docs:build:
+    desc: Generate STL + 3MF + SVGs and render index.md to docs/index.html
+    deps: [v0]
+    cmds:
+      - mkdir -p docs
+      - cp v0-*.stl v0-*.3mf v0-*_cutaway_*.svg docs/
+      - task-plus md2html --file index.md --dst docs --label "Universal Mount" --no-breadcrumbs
+
+  docs:preview:
+    desc: Build docs and serve them locally (delegates to `tp pages`)
+    deps: [docs:build]
+    cmds:
+      - tp pages
+
+  fmt:
+    desc: Format Go files
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - go test ./...
+
+  check:
+    desc: fmt + vet + test
+    deps: [fmt, vet, test]
+
+  clean:
+    desc: Remove generated STL and SVG files
+    cmds:
+      - rm -f *.stl *.svg

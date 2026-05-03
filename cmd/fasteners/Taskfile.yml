@@ -1,0 +1,41 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - go run .
+    silent: false
+
+  spax:
+    desc: Spax 4×20, schematic
+    cmds:
+      - go run . -part spax-4x20 -render schematic
+
+  spax-threaded:
+    desc: Spax 4×20, threaded
+    cmds:
+      - go run . -part spax-4x20 -render threaded
+
+  spax-3_5x16:
+    desc: Spax 3.5×16, schematic + threaded
+    cmds:
+      - go run . -part spax-3_5x16 -render schematic
+      - go run . -part spax-3_5x16 -render threaded
+
+  all:
+    desc: Render every catalogue entry, schematic + threaded
+    cmds:
+      - go run . -part spax-3_5x16 -render schematic
+      - go run . -part spax-3_5x16 -render threaded
+      - go run . -part spax-4x20 -render schematic
+      - go run . -part spax-4x20 -render threaded
+
+  docs:build:
+    desc: Render every catalogue entry's SVGs and build the catalogue page
+    deps: [all]
+    cmds:
+      - task-plus md2html --file index.md --dst docs --label "Fasteners" --no-breadcrumbs
+
+  clean:
+    cmds:
+      - rm -rf docs
