@@ -54,7 +54,7 @@ func run(part, render, outDir string, resDiv uint) error {
 	)
 	switch render {
 	case "schematic":
-		shape, err = screw.Schematic(&bld)
+		shape, err = screw.Schematic(&bld, 0)
 		suf = ""
 	case "threaded":
 		shape, err = screw.Threaded(&bld)
@@ -131,6 +131,10 @@ func writeSVG(filename string, sdf3 gleval.SDF3, s fasteners.WoodScrew) error {
 		UMin:   -s.DHead, UMax: s.DHead,
 		VMin: -s.OverallLength - 1, VMax: 1,
 	}
-	grid := 400
-	return svgslice.WriteSlice(filename, sdf3, plane, grid, grid)
+	opts := svgslice.Options{
+		GridX: 400, GridY: 400,
+		Title:          s.Name,
+		AutoDimensions: true,
+	}
+	return svgslice.WriteSliceOpt(filename, sdf3, plane, opts, nil)
 }

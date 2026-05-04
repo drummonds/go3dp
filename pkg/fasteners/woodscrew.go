@@ -5,12 +5,42 @@ import (
 	"fmt"
 	"math"
 
+	"codeberg.org/hum3/go3dp/pkg/parts"
 	"github.com/soypat/geometry/ms2"
 	"github.com/soypat/geometry/ms3"
 	"github.com/soypat/gsdf"
 	"github.com/soypat/gsdf/forge/threads"
 	"github.com/soypat/gsdf/glbuild"
 )
+
+// Compile-time check: WoodScrew implements parts.Part.
+var _ parts.Part = WoodScrew{}
+
+// insertPlugLen is the screwdriver-access column added above the head
+// in the Insert form. Fixed at 10 mm — enough room for a typical Torx
+// or Pozidriv driver to reach the head without hitting the host.
+const insertPlugLen = 10.0
+
+// Shape implements parts.Part: the screw at its true catalogue
+// dimensions, no plug.
+func (s WoodScrew) Shape(bld *gsdf.Builder) (glbuild.Shader3D, error) {
+	return s.Schematic(bld, 0)
+}
+
+// Insert implements parts.Part: the screw oversized by tol.Radial on
+// every diameter and tol.Axial in length, plus a 10 mm plug above the
+// head for screwdriver access. Subtract this from a host to make a
+// clearance + countersink + access hole in one boolean.
+func (s WoodScrew) Insert(bld *gsdf.Builder, tol parts.Tolerance) (glbuild.Shader3D, error) {
+	bigger := s
+	bigger.DShank = s.DShank + tol.Radial
+	bigger.DHead = s.DHead + tol.Radial
+	// Keep the 90° countersink: depth grows by half the diameter
+	// growth (HeadDepth = (DHead-DShank)/2 invariant for 90°).
+	bigger.HeadDepth = s.HeadDepth + tol.Radial/2
+	bigger.OverallLength = s.OverallLength + tol.Axial
+	return bigger.Schematic(bld, insertPlugLen)
+}
 
 // WoodScrew describes a wood / chipboard / construction screw at the
 // abstract level: countersunk head + parallel shank + conical point. All
@@ -49,11 +79,19 @@ type Vendor struct {
 // where actual thread geometry is irrelevant. See Threaded for the slow
 // path with helical threads.
 //
+// plugLen extends the head outward (z > 0) as a cylinder of diameter
+// DHead. When the schematic is subtracted from a block, the plug carves
+// the screwdriver-access column above the head face in one boolean.
+// Pass 0 for visualisation (no plug above the head).
+//
 // Returned shape is centred on the world Z axis with the head's outer
 // face at z = 0 and the tip at z = -s.OverallLength.
-func (s WoodScrew) Schematic(bld *gsdf.Builder) (glbuild.Shader3D, error) {
+func (s WoodScrew) Schematic(bld *gsdf.Builder, plugLen float32) (glbuild.Shader3D, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
+	}
+	if plugLen < 0 {
+		return nil, errors.New("WoodScrew.Schematic: plugLen must be non-negative")
 	}
 
 	// Half-profile in builder (X, Y) where X = radius and Y = axial
@@ -61,7 +99,8 @@ func (s WoodScrew) Schematic(bld *gsdf.Builder) (glbuild.Shader3D, error) {
 	// about X, builder Y becomes world Z.
 	//
 	// Vertex order (counter-clockwise viewed from +Z in builder space):
-	//   axis top -> head rim -> countersink toe -> point shoulder -> tip
+	//   axis top -> [plug rim top ->] head rim -> countersink toe ->
+	//   point shoulder -> tip
 	rHead := s.DHead / 2
 	rShank := s.DShank / 2
 	yHead := float32(0)
@@ -69,13 +108,16 @@ func (s WoodScrew) Schematic(bld *gsdf.Builder) (glbuild.Shader3D, error) {
 	yPoint := -(s.OverallLength - s.PointLength)
 	yTip := -s.OverallLength
 
-	verts := []ms2.Vec{
-		{X: 0, Y: yHead},
-		{X: rHead, Y: yHead},
-		{X: rShank, Y: yToe},
-		{X: rShank, Y: yPoint},
-		{X: 0, Y: yTip},
+	verts := []ms2.Vec{{X: 0, Y: yHead + plugLen}}
+	if plugLen > 0 {
+		verts = append(verts, ms2.Vec{X: rHead, Y: yHead + plugLen})
 	}
+	verts = append(verts,
+		ms2.Vec{X: rHead, Y: yHead},
+		ms2.Vec{X: rShank, Y: yToe},
+		ms2.Vec{X: rShank, Y: yPoint},
+		ms2.Vec{X: 0, Y: yTip},
+	)
 	profile := bld.NewPolygon(verts)
 	solid := bld.Revolve(profile, 0)
 	// Builder Y maps to world Z under +π/2 rotation about world X (same

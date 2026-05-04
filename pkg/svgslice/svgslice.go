@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"time"
 
 	"github.com/soypat/geometry/ms2"
 	"github.com/soypat/geometry/ms3"
@@ -69,16 +70,105 @@ type Dimension struct {
 	Color          string
 }
 
-// WriteSlice samples sdf3 on a gridX×gridY grid covering the Plane
-// rectangle, runs marching squares to extract zero-crossing line segments,
-// and writes the result to filename as an SVG.
-func WriteSlice(filename string, sdf3 gleval.SDF3, plane Plane, gridX, gridY int) error {
-	return WriteSliceLabelled(filename, sdf3, plane, gridX, gridY, nil)
+// Default display target: ~100 mm at the 96-dpi CSS reference (≈378 px).
+// Picked so on-screen previews of slices have a consistent footprint
+// regardless of the part's physical size.
+const (
+	defaultDisplayPx float32 = 378
+	defaultCellPx    float32 = 6
+	minAutoGrid              = 16
+	maxAutoGrid              = 1024
+)
+
+// Options controls SVG output sizing and marching-squares grid resolution.
+// The zero value renders a fixed display footprint (≈378 px on the longest
+// side) with the grid auto-sized so each cell spans ~CellPx display pixels.
+type Options struct {
+	// DisplayPx is the longest output side in CSS pixels. Defaults to 378
+	// (≈100 mm at 96 dpi) when zero. Ignored if AbsoluteUnits is true.
+	DisplayPx float32
+
+	// AbsoluteUnits reverts to legacy "<width>mm" SVG sizing, so the file
+	// renders at physical model size in mm-aware viewers / on paper.
+	AbsoluteUnits bool
+
+	// GridX, GridY override the marching-squares grid. Each axis whose
+	// value is <= 0 is auto-computed from DisplayPx and CellPx.
+	GridX, GridY int
+
+	// CellPx is the target display-pixel size of one marching-squares cell
+	// during auto-grid. Defaults to 6 when zero.
+	CellPx float32
+
+	// HideAxisGizmo suppresses the XYZ orientation indicator in the bottom-
+	// left corner. The gizmo is drawn by default; its labels are derived
+	// from Plane.U / Plane.V (non-cardinal slices skip it regardless).
+	HideAxisGizmo bool
+
+	// HideFooter suppresses the bottom-right "<units>  <date>" caption.
+	HideFooter bool
+
+	// Units is the unit label shown in the footer. Defaults to "mm".
+	Units string
+
+	// Date is the date string shown in the footer. Defaults to today's
+	// UTC date formatted "YYYY-MM-DD" when empty.
+	Date string
+
+	// Title is shown in the bottom-right block above the units+date line
+	// (e.g. "sphere r=250"). Empty by default.
+	Title string
+
+	// AutoDimensions appends two Dimension annotations derived from the
+	// contour's bounding box: a horizontal max-width dim along the bottom
+	// and a vertical max-height dim along the right. Labelled in opts.Units.
+	AutoDimensions bool
 }
 
-// WriteSliceLabelled is WriteSlice with optional text labels and
-// dimension annotations drawn on top of the contour.
-func WriteSliceLabelled(filename string, sdf3 gleval.SDF3, plane Plane, gridX, gridY int, labels []Label, dims ...Dimension) error {
+// WriteSliceOpt samples sdf3 on a grid covering the Plane rectangle,
+// runs marching squares to extract zero-crossing line segments, and
+// writes the result to filename as an SVG. opts controls output sizing,
+// grid resolution, and decorations (title, units, date, gizmo, auto-
+// dims). labels and dims are drawn on top of the contour.
+func WriteSliceOpt(filename string, sdf3 gleval.SDF3, plane Plane, opts Options, labels []Label, dims ...Dimension) error {
+	if opts.DisplayPx <= 0 {
+		opts.DisplayPx = defaultDisplayPx
+	}
+	if opts.CellPx <= 0 {
+		opts.CellPx = defaultCellPx
+	}
+
+	margin := float32(5.0)
+	uMin, uMax := plane.UMin-margin, plane.UMax+margin
+	vMin, vMax := plane.VMin-margin, plane.VMax+margin
+	yMin, yMax := -vMax, -vMin
+	width, height := uMax-uMin, yMax-yMin
+
+	// Calibrate decorations to a 100 mm output: scale=1 keeps the historic
+	// 4 mm gizmo arms; bigger or smaller outputs scale linearly so gizmo,
+	// footer, and auto-dim text stay a constant ~4 % of the slice width.
+	gizmoSpan := width
+	if height > gizmoSpan {
+		gizmoSpan = height
+	}
+	gizmoScale := gizmoSpan / 100
+
+	// Auto-grid: each axis is sized so its cells span ~CellPx display pixels.
+	gridX, gridY := opts.GridX, opts.GridY
+	if gridX <= 0 || gridY <= 0 {
+		var pxPerUnit float32
+		if width >= height {
+			pxPerUnit = opts.DisplayPx / width
+		} else {
+			pxPerUnit = opts.DisplayPx / height
+		}
+		if gridX <= 0 {
+			gridX = clampGrid(int((plane.UMax - plane.UMin) * pxPerUnit / opts.CellPx))
+		}
+		if gridY <= 0 {
+			gridY = clampGrid(int((plane.VMax - plane.VMin) * pxPerUnit / opts.CellPx))
+		}
+	}
 	if gridX < 2 || gridY < 2 {
 		return fmt.Errorf("svgslice: grid must be at least 2x2")
 	}
@@ -166,6 +256,10 @@ func WriteSliceLabelled(filename string, sdf3 gleval.SDF3, plane Plane, gridX, g
 		}
 	}
 
+	if opts.AutoDimensions {
+		dims = append(dims, autoDimensions(segs, gizmoScale)...)
+	}
+
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -174,19 +268,20 @@ func WriteSliceLabelled(filename string, sdf3 gleval.SDF3, plane Plane, gridX, g
 	w := bufio.NewWriter(f)
 	defer w.Flush()
 
-	// Margin around the slice region in plane units. Sized so a single
-	// dimension annotation (extension line ~1.5 mm + label ~1.5 mm font
-	// + label width allowance) doesn't overflow.
-	margin := float32(5.0)
-	uMin, uMax := plane.UMin-margin, plane.UMax+margin
-	vMin, vMax := plane.VMin-margin, plane.VMax+margin
-	yMin, yMax := -vMax, -vMin
-
-	width, height := uMax-uMin, yMax-yMin
 	fmt.Fprint(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	fmt.Fprintf(w,
-		"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"%g %g %g %g\" width=\"%gmm\" height=\"%gmm\">\n",
-		uMin, yMin, width, height, width, height)
+	if opts.AbsoluteUnits {
+		fmt.Fprintf(w,
+			"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"%g %g %g %g\" width=\"%gmm\" height=\"%gmm\">\n",
+			uMin, yMin, width, height, width, height)
+	} else {
+		dispW, dispH := opts.DisplayPx, opts.DisplayPx*height/width
+		if height > width {
+			dispW, dispH = opts.DisplayPx*width/height, opts.DisplayPx
+		}
+		fmt.Fprintf(w,
+			"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"%g %g %g %g\" width=\"%g\" height=\"%g\">\n",
+			uMin, yMin, width, height, dispW, dispH)
+	}
 	fmt.Fprintf(w,
 		"  <rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" fill=\"#fafafa\"/>\n",
 		uMin, yMin, width, height)
@@ -230,11 +325,18 @@ func WriteSliceLabelled(filename string, sdf3 gleval.SDF3, plane Plane, gridX, g
 	}
 
 	for _, d := range dims {
-		writeDimension(w, d)
+		writeDimension(w, d, gizmoScale)
 	}
 
-	// XYZ axis gizmo in the bottom-left corner of the viewBox.
-	writeAxisGizmo(w, plane, uMin+3, -vMin-3)
+	if !opts.HideAxisGizmo {
+		writeAxisGizmo(w, plane, uMin+3*gizmoScale, -vMin-3*gizmoScale, gizmoScale)
+	}
+	if !opts.HideFooter {
+		writeFooter(w, uMax, yMax, gizmoScale, opts)
+	}
+	if opts.Title != "" {
+		writeTitle(w, (uMin+uMax)/2, yMin, gizmoScale, opts.Title)
+	}
 
 	fmt.Fprint(w, "</svg>\n")
 	return nil
@@ -243,20 +345,23 @@ func WriteSliceLabelled(filename string, sdf3 gleval.SDF3, plane Plane, gridX, g
 // writeAxisGizmo emits a small XYZ orientation indicator at SVG position
 // (originX, originY). The two in-plane axes (Plane.U, Plane.V) are drawn
 // as labelled arrows; the perpendicular axis is shown as a coloured dot
-// at the origin. Convention: X red, Y green, Z blue.
-func writeAxisGizmo(w *bufio.Writer, plane Plane, originX, originY float32) {
+// at the origin. Convention: X red, Y green, Z blue. All sizes are
+// multiplied by scale, which is calibrated so that scale=1 matches a
+// 100 mm output box (the default).
+func writeAxisGizmo(w *bufio.Writer, plane Plane, originX, originY, scale float32) {
 	uAx := axisOf(plane.U)
 	vAx := axisOf(plane.V)
 	perpAx := perpAxisOf(plane.U, plane.V)
 	if uAx == "?" || vAx == "?" {
 		return // non-cardinal slice; skip the gizmo
 	}
-	const (
-		armLen   = 4.0
-		arrowW   = 0.4
-		strokeW  = 0.3
-		fontSize = 1.5
-	)
+	armLen := 4.0 * scale
+	arrowW := 0.4 * scale
+	strokeW := 0.6 * scale
+	fontSize := 2.5 * scale
+	labelGap := 0.8 * scale
+	dotR := 0.55 * scale
+	perpLabelOff := 1.0 * scale
 
 	// U arrow: along +X SVG (right).
 	tipUX, tipUY := originX+armLen, originY
@@ -269,7 +374,7 @@ func writeAxisGizmo(w *bufio.Writer, plane Plane, originX, originY float32) {
 		axisColor(uAx))
 	fmt.Fprintf(w,
 		"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"%s\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"sans-serif\">%s</text>\n",
-		tipUX+0.6, tipUY, fontSize, axisColor(uAx), uAx)
+		tipUX+labelGap, tipUY, fontSize, axisColor(uAx), uAx)
 
 	// V arrow: along -Y SVG (up on screen, since SVG y is flipped from V).
 	tipVX, tipVY := originX, originY-armLen
@@ -282,15 +387,15 @@ func writeAxisGizmo(w *bufio.Writer, plane Plane, originX, originY float32) {
 		axisColor(vAx))
 	fmt.Fprintf(w,
 		"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"%s\" text-anchor=\"middle\" dominant-baseline=\"alphabetic\" font-family=\"sans-serif\">%s</text>\n",
-		tipVX, tipVY-0.6, fontSize, axisColor(vAx), vAx)
+		tipVX, tipVY-labelGap, fontSize, axisColor(vAx), vAx)
 
 	// Perpendicular axis: dot at origin, label to the lower-left.
 	fmt.Fprintf(w,
-		"  <circle cx=\"%g\" cy=\"%g\" r=\"0.55\" fill=\"%s\"/>\n",
-		originX, originY, axisColor(perpAx))
+		"  <circle cx=\"%g\" cy=\"%g\" r=\"%g\" fill=\"%s\"/>\n",
+		originX, originY, dotR, axisColor(perpAx))
 	fmt.Fprintf(w,
 		"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"%s\" text-anchor=\"end\" dominant-baseline=\"hanging\" font-family=\"sans-serif\">%s</text>\n",
-		originX-0.8, originY+0.6, fontSize, axisColor(perpAx), perpAx)
+		originX-perpLabelOff, originY+labelGap, fontSize, axisColor(perpAx), perpAx)
 }
 
 func axisOf(v ms3.Vec) string {
@@ -387,8 +492,9 @@ func chainLoops(segs []seg) [][]ms2.Vec {
 
 // writeDimension renders one dimension annotation (extension lines, dim
 // line, two inward-pointing arrowheads, centred text label). All math
-// is done in plane (U, V); SVG y is the negation of V.
-func writeDimension(w *bufio.Writer, d Dimension) {
+// is done in plane (U, V); SVG y is the negation of V. scale calibrates
+// stroke widths and arrow sizes to a 100 mm output.
+func writeDimension(w *bufio.Writer, d Dimension, scale float32) {
 	fontSize := d.FontSize
 	if fontSize == 0 {
 		fontSize = 1.5
@@ -408,37 +514,45 @@ func writeDimension(w *bufio.Writer, d Dimension) {
 	px, py := -uy, ux
 	label := d.Label
 	if label == "" {
-		label = fmt.Sprintf("%.1f mm", dlen)
+		// Unit shown in the title block — don't repeat per dimension.
+		label = fmt.Sprintf("%.1f", dlen)
 	}
 
-	// Stroke width tuned to look right against the 0.2 contour stroke.
-	const strokeW = 0.12
+	// Two stroke weights: the dim line itself reads as a primary mark;
+	// the extension lines (From→DimFrom, To→DimTo) stay thin, like
+	// engineering-drawing convention.
+	extStroke := 0.12 * scale
+	dimStroke := 0.35 * scale
 
-	// Extension lines (From → DimFrom, To → DimTo).
+	// Extension lines.
 	fmt.Fprintf(w,
 		"  <g stroke=\"%s\" stroke-width=\"%g\" fill=\"none\">\n",
-		color, strokeW)
+		color, extStroke)
 	fmt.Fprintf(w,
 		"    <line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\"/>\n",
 		d.From.X, -d.From.Y, d.DimFrom.X, -d.DimFrom.Y)
 	fmt.Fprintf(w,
 		"    <line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\"/>\n",
 		d.To.X, -d.To.Y, d.DimTo.X, -d.DimTo.Y)
+	fmt.Fprint(w, "  </g>\n")
+
 	// Dimension line.
+	fmt.Fprintf(w,
+		"  <g stroke=\"%s\" stroke-width=\"%g\" fill=\"none\">\n",
+		color, dimStroke)
 	fmt.Fprintf(w,
 		"    <line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\"/>\n",
 		d.DimFrom.X, -d.DimFrom.Y, d.DimTo.X, -d.DimTo.Y)
 	fmt.Fprint(w, "  </g>\n")
 
-	// Arrowheads — solid triangles. Inside arrows (tip at endpoint, base
+	// Arrowheads — solid triangles, sized as a fraction of the label
+	// height (≈half the font size). Inside arrows (tip at endpoint, base
 	// pointing into the dim line) when the line is long enough; outside
 	// arrows (tip at endpoint, base pointing AWAY from the dim line)
 	// when it isn't, so they don't overlap each other or the label.
-	const (
-		arrowLen        = 1.0
-		arrowHalf       = 0.35
-		insideThreshold = 2.0 // dlen ≤ this → outside arrows
-	)
+	arrowLen := fontSize * 0.5
+	arrowHalf := fontSize * 0.2
+	insideThreshold := fontSize * 1.5 // dlen ≤ this → outside arrows
 	sign := float32(1)
 	if dlen <= insideThreshold {
 		sign = -1 // base offset goes outward
@@ -463,7 +577,7 @@ func writeDimension(w *bufio.Writer, d Dimension) {
 	if sign < 0 {
 		fmt.Fprintf(w,
 			"  <g stroke=\"%s\" stroke-width=\"%g\" fill=\"none\">\n",
-			color, strokeW)
+			color, dimStroke)
 		fmt.Fprintf(w,
 			"    <line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\"/>\n",
 			d.DimFrom.X, -d.DimFrom.Y, baseFromX, -baseFromY)
@@ -473,19 +587,126 @@ func writeDimension(w *bufio.Writer, d Dimension) {
 		fmt.Fprint(w, "  </g>\n")
 	}
 
-	// Label at midpoint, offset by fontSize*0.7 perpendicular to the dim
-	// line, on the side AWAY from From (so the text doesn't sit on top
-	// of the part). Side selection: pick the perp direction whose dot
-	// with (DimFrom - From) is positive.
+	// Label placement at the dim-line midpoint, on the side AWAY from
+	// From. For mostly-horizontal dim lines: centred above/below. For
+	// mostly-vertical dim lines: to the side at midpoint, anchor "start"
+	// or "end" depending on which side the part is on.
 	midX, midY := (d.DimFrom.X+d.DimTo.X)/2, (d.DimFrom.Y+d.DimTo.Y)/2
 	awayX, awayY := d.DimFrom.X-d.From.X, d.DimFrom.Y-d.From.Y
 	if px*awayX+py*awayY < 0 {
 		px, py = -px, -py
 	}
-	off := fontSize * 0.7
+	if uy*uy > ux*ux {
+		// Vertical dim line — place label to the side at midpoint.
+		off := fontSize * 0.4
+		anchor := "start"
+		if px < 0 {
+			anchor = "end"
+		}
+		fmt.Fprintf(w,
+			"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"%s\" text-anchor=\"%s\" dominant-baseline=\"middle\" font-family=\"sans-serif\">%s</text>\n",
+			midX+px*off, -midY, fontSize, color, anchor, escapeXML(label))
+	} else {
+		off := fontSize * 0.7
+		fmt.Fprintf(w,
+			"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"%s\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\">%s</text>\n",
+			midX+px*off, -(midY + py*off), fontSize, color, escapeXML(label))
+	}
+}
+
+// writeFooter draws units + date stacked in the bottom-right corner.
+// Font size matches the axis gizmo so the two decorations read as a pair.
+func writeFooter(w *bufio.Writer, x, y, scale float32, opts Options) {
+	units := opts.Units
+	if units == "" {
+		units = "mm"
+	}
+	date := opts.Date
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02")
+	}
+	fontSize := 2.5 * scale
+	pad := 1.5 * scale
+	lineGap := fontSize * 1.25
+
+	// Bottom line sits at (x-pad, y-pad); earlier line stacks upwards.
+	lines := []string{units, date}
+	for i, line := range lines {
+		yLine := y - pad - lineGap*float32(len(lines)-1-i)
+		fmt.Fprintf(w,
+			"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"#666\" text-anchor=\"end\" dominant-baseline=\"alphabetic\" font-family=\"sans-serif\">%s</text>\n",
+			x-pad, yLine, fontSize, escapeXML(line))
+	}
+}
+
+// writeTitle draws the slice title at the top-centre of the viewBox.
+// (xCentre, yTop) is the SVG-space midpoint of the top edge. Title text
+// is sized one step larger than the gizmo/footer for emphasis.
+func writeTitle(w *bufio.Writer, xCentre, yTop, scale float32, title string) {
+	fontSize := 3.5 * scale
+	pad := 1.5 * scale
 	fmt.Fprintf(w,
-		"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"%s\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\">%s</text>\n",
-		midX+px*off, -(midY + py*off), fontSize, color, escapeXML(label))
+		"  <text x=\"%g\" y=\"%g\" font-size=\"%g\" fill=\"#666\" text-anchor=\"middle\" dominant-baseline=\"hanging\" font-family=\"sans-serif\">%s</text>\n",
+		xCentre, yTop+pad, fontSize, escapeXML(title))
+}
+
+// autoDimensions derives horizontal (max U-extent) and vertical (max
+// V-extent) dimensions from the contour segment bounding box. Returns
+// nil if there are no segments. Labels are bare numbers — the unit
+// appears in the title block.
+func autoDimensions(segs []seg, scale float32) []Dimension {
+	if len(segs) == 0 {
+		return nil
+	}
+	min, max := segs[0].a, segs[0].a
+	for _, s := range segs {
+		for _, p := range [2]ms2.Vec{s.a, s.b} {
+			if p.X < min.X {
+				min.X = p.X
+			}
+			if p.Y < min.Y {
+				min.Y = p.Y
+			}
+			if p.X > max.X {
+				max.X = p.X
+			}
+			if p.Y > max.Y {
+				max.Y = p.Y
+			}
+		}
+	}
+	off := 3 * scale     // dim line offset from contour
+	font := 2.5 * scale  // matches gizmo + footer
+	w := max.X - min.X
+	h := max.Y - min.Y
+	return []Dimension{
+		{
+			From:     ms2.Vec{X: min.X, Y: min.Y},
+			To:       ms2.Vec{X: max.X, Y: min.Y},
+			DimFrom:  ms2.Vec{X: min.X, Y: min.Y - off},
+			DimTo:    ms2.Vec{X: max.X, Y: min.Y - off},
+			Label:    fmt.Sprintf("%.1f", w),
+			FontSize: font,
+		},
+		{
+			From:     ms2.Vec{X: max.X, Y: min.Y},
+			To:       ms2.Vec{X: max.X, Y: max.Y},
+			DimFrom:  ms2.Vec{X: max.X + off, Y: min.Y},
+			DimTo:    ms2.Vec{X: max.X + off, Y: max.Y},
+			Label:    fmt.Sprintf("%.1f", h),
+			FontSize: font,
+		},
+	}
+}
+
+func clampGrid(n int) int {
+	if n < minAutoGrid {
+		return minAutoGrid
+	}
+	if n > maxAutoGrid {
+		return maxAutoGrid
+	}
+	return n
 }
 
 func escapeXML(s string) string {

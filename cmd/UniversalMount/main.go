@@ -257,6 +257,13 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 	bb := shape.Bounds()
 	pad := float32(2.0)
 
+	mkOpts := func(title string, dims []svgslice.Dimension) (svgslice.Options, []svgslice.Dimension) {
+		return svgslice.Options{
+			GridX: 256, GridY: 256,
+			Title: title,
+		}, dims
+	}
+
 	axial := svgslice.Plane{
 		Origin: ms3.Vec{},
 		U:      ms3.Vec{X: 1},
@@ -264,7 +271,8 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 		UMin:   bb.Min.X - pad, UMax: bb.Max.X + pad,
 		VMin: bb.Min.Z - pad, VMax: bb.Max.Z + pad,
 	}
-	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_axial.svg", sdf3, axial, 256, 256, nil, axialDimensions(sz)...); err != nil {
+	axOpts, axDims := mkOpts(sz.Name+" — axial", axialDimensions(sz))
+	if err := svgslice.WriteSliceOpt(baseName+"_cutaway_axial.svg", sdf3, axial, axOpts, nil, axDims...); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s_cutaway_axial.svg\n", baseName)
@@ -273,7 +281,8 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 		offAxis := axial
 		offAxis.Origin = ms3.Vec{Y: y}
 		name := fmt.Sprintf("%s_cutaway_screwY%g.svg", baseName, y)
-		if err := svgslice.WriteSliceLabelled(name, sdf3, offAxis, 256, 256, nil, axialDimensions(sz)...); err != nil {
+		offOpts, offDims := mkOpts(fmt.Sprintf("%s — screw Y=%g", sz.Name, y), axialDimensions(sz))
+		if err := svgslice.WriteSliceOpt(name, sdf3, offAxis, offOpts, nil, offDims...); err != nil {
 			return err
 		}
 		fmt.Printf("wrote %s\n", name)
@@ -290,7 +299,8 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 		UMin:   bb.Min.Y - pad, UMax: bb.Max.Y + pad,
 		VMin: bb.Min.Z - pad, VMax: bb.Max.Z + pad,
 	}
-	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_side.svg", sdf3, side, 256, 256, nil, axialDimensions(sz)...); err != nil {
+	sideOpts, sideDims := mkOpts(sz.Name+" — side", axialDimensions(sz))
+	if err := svgslice.WriteSliceOpt(baseName+"_cutaway_side.svg", sdf3, side, sideOpts, nil, sideDims...); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s_cutaway_side.svg\n", baseName)
@@ -303,7 +313,8 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 		UMin:   bb.Min.X - pad, UMax: bb.Max.X + pad,
 		VMin: bb.Min.Y - pad, VMax: bb.Max.Y + pad,
 	}
-	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_top.svg", sdf3, top, 256, 256, nil, topDimensions(sz)...); err != nil {
+	topOpts, topDims := mkOpts(sz.Name+" — top", topDimensions(sz))
+	if err := svgslice.WriteSliceOpt(baseName+"_cutaway_top.svg", sdf3, top, topOpts, nil, topDims...); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s_cutaway_top.svg\n", baseName)
