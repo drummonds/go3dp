@@ -1,0 +1,234 @@
+# Universal Mount — local tasks
+# Run from this directory, or via `task um:<name>` from the repo root.
+# https://taskfile.dev
+#
+# Each rendering task lists its Go sources (this dir + pkg/*) and the artefact
+# globs it produces. Re-running is a no-op unless something on the sources side
+# has changed; method=timestamp matches Go's own incremental-build mental model.
+
+version: '3'
+
+tasks:
+  default:
+    desc: List available Universal Mount tasks
+    cmds:
+      - task --list-all
+    silent: true
+
+  v0:
+    desc: Build all v0 size variants (STL + SVG cutaways + 3MF)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*.stl'
+      - 'v0-*.3mf'
+      - 'v0-*.svg'
+    cmds:
+      - go run . -size=all -out=all
+
+  v0:xs:
+    desc: Build v0-XS only (1 screw, 14 mm wide)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-XS_*.stl'
+      - 'v0-XS_*.3mf'
+      - 'v0-XS_*.svg'
+    cmds:
+      - go run . -size=xs -out=all
+
+  v0:s:
+    desc: Build v0-S only (2 screws, 26 mm wide)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-S_*.stl'
+      - 'v0-S_*.3mf'
+      - 'v0-S_*.svg'
+    cmds:
+      - go run . -size=s -out=all
+
+  v0:m:
+    desc: Build v0-M only (3 screws triangle, 34 mm wide)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-M_*.stl'
+      - 'v0-M_*.3mf'
+      - 'v0-M_*.svg'
+    cmds:
+      - go run . -size=m -out=all
+
+  v0:l:
+    desc: Build v0-L only (3 screws triangle, 44 mm wide)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-L_*.stl'
+      - 'v0-L_*.3mf'
+      - 'v0-L_*.svg'
+    cmds:
+      - go run . -size=l -out=all
+
+  v0:stl:
+    desc: All sizes, STL only
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*.stl'
+    cmds:
+      - go run . -size=all -out=stl
+
+  v0:svg:
+    desc: All sizes, SVG cutaways only
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*.svg'
+    cmds:
+      - go run . -size=all -out=svg
+
+  v0:3mf:
+    desc: All sizes, 3MF only (browser preview)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*.3mf'
+    cmds:
+      - go run . -size=all -out=3mf
+
+  v0:block:
+    desc: All sizes, block only (no cover)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*_block.stl'
+      - 'v0-*_block.3mf'
+      - 'v0-*_block_*.svg'
+    cmds:
+      - go run . -size=all -part=block -out=all
+
+  v0:cover:
+    desc: All sizes, cover cap only
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*_cover.stl'
+      - 'v0-*_cover.3mf'
+      - 'v0-*_cover_*.svg'
+    cmds:
+      - go run . -size=all -part=cover -out=all
+
+  v0:adaptor:
+    desc: All sizes, slide-on adaptor only (PLA tolerances)
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*_adaptor.stl'
+      - 'v0-*_adaptor.3mf'
+      - 'v0-*_adaptor_*.svg'
+    cmds:
+      - go run . -size=all -part=adaptor -out=all
+
+  v1:
+    desc: Build all v1 artifacts (placeholder; not yet implemented)
+    cmds:
+      - echo "v1 (U-tube puck) not yet implemented — see README §2"
+    silent: true
+
+  docs:build:
+    desc: Generate STL + 3MF + SVGs and render index.md + README.md to docs/
+    deps: [v0]
+    method: timestamp
+    sources:
+      - 'index.md'
+      - 'README.md'
+      - 'v0-*.stl'
+      - 'v0-*.3mf'
+      - 'v0-*.svg'
+    generates:
+      - 'docs/index.html'
+      - 'docs/README.html'
+      - 'docs/v0-*.stl'
+      - 'docs/v0-*.3mf'
+      - 'docs/v0-*.svg'
+    cmds:
+      - mkdir -p docs
+      - cp v0-*.stl v0-*.3mf v0-*_cutaway_*.svg docs/
+      - task-plus md2html --file index.md --dst docs --label "Universal Mount" --no-breadcrumbs
+      - task-plus md2html --file README.md --dst docs --label "Universal Mount" --no-breadcrumbs
+
+  docs:preview:
+    desc: Build docs and serve them locally (delegates to `tp pages`)
+    deps: [docs:build]
+    cmds:
+      - tp pages
+
+  fmt:
+    desc: Format Go files
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - go test ./...
+
+  check:
+    desc: fmt + vet + test
+    deps: [fmt, vet, test]
+
+  clean:
+    desc: Remove generated STL and SVG files
+    cmds:
+      - rm -f *.stl *.svg *.3mf
+      - rm -rf docs

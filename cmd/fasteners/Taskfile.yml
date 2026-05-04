@@ -1,0 +1,91 @@
+version: '3'
+
+# Each rendering task lists its Go sources and the artefact files it produces.
+# Re-running is a no-op unless a Go source has been touched.
+
+tasks:
+  default:
+    cmds:
+      - go run .
+    silent: false
+
+  spax:
+    desc: Spax 4×20, schematic
+    method: timestamp
+    sources:
+      - 'main.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+    generates:
+      - 'docs/spax-4x20.3mf'
+      - 'docs/spax-4x20_xz.svg'
+    cmds:
+      - go run . -part spax-4x20 -render schematic
+
+  spax-threaded:
+    desc: Spax 4×20, threaded
+    method: timestamp
+    sources:
+      - 'main.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+    generates:
+      - 'docs/spax-4x20_threaded.3mf'
+      - 'docs/spax-4x20_threaded_xz.svg'
+    cmds:
+      - go run . -part spax-4x20 -render threaded
+
+  spax-3_5x16:
+    desc: Spax 3.5×16, schematic + threaded
+    method: timestamp
+    sources:
+      - 'main.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+    generates:
+      - 'docs/spax-3_5x16.3mf'
+      - 'docs/spax-3_5x16_xz.svg'
+      - 'docs/spax-3_5x16_threaded.3mf'
+      - 'docs/spax-3_5x16_threaded_xz.svg'
+    cmds:
+      - go run . -part spax-3_5x16 -render schematic
+      - go run . -part spax-3_5x16 -render threaded
+
+  all:
+    desc: Render every catalogue entry, schematic + threaded
+    method: timestamp
+    sources:
+      - 'main.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+    generates:
+      - 'docs/spax-3_5x16.3mf'
+      - 'docs/spax-3_5x16_xz.svg'
+      - 'docs/spax-3_5x16_threaded.3mf'
+      - 'docs/spax-3_5x16_threaded_xz.svg'
+      - 'docs/spax-4x20.3mf'
+      - 'docs/spax-4x20_xz.svg'
+      - 'docs/spax-4x20_threaded.3mf'
+      - 'docs/spax-4x20_threaded_xz.svg'
+    cmds:
+      - go run . -part spax-3_5x16 -render schematic
+      - go run . -part spax-3_5x16 -render threaded
+      - go run . -part spax-4x20 -render schematic
+      - go run . -part spax-4x20 -render threaded
+
+  docs:build:
+    desc: Render every catalogue entry's SVGs and build the catalogue page
+    deps: [all]
+    method: timestamp
+    sources:
+      - 'index.md'
+      - 'docs/spax-*.3mf'
+      - 'docs/spax-*.svg'
+    generates:
+      - 'docs/index.html'
+    cmds:
+      - task-plus md2html --file index.md --dst docs --label "Fasteners" --no-breadcrumbs
+
+  clean:
+    cmds:
+      - rm -rf docs

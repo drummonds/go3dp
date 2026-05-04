@@ -1,0 +1,182 @@
+title: go3dp build pipeline {
+  near: top-center
+  shape: text
+  style: {
+    font-size: 24
+    bold: true
+  }
+}
+
+# Go source: per-part programs under cmd/. Each part is a small main package
+# that defines its geometry and dispatches to the shared gsdf → render → write
+# pipeline.
+source: {
+  label: "Go source (cmd/*)"
+  style.fill: "#e3f2fd"
+
+  geometry: {
+    label: "Geometry\n(v0.go, v0_adaptor.go,\noctagon.go, screws.go)"
+    shape: page
+  }
+  main: {
+    label: "main.go\nflag parsing\n(-size -part -out -mesh)"
+    shape: page
+  }
+  fasteners_lib: {
+    label: "pkg/fasteners\n(WoodScrew, M3-M6,\nthread profiles)"
+    shape: page
+  }
+}
+
+# Modelling: gsdf builds a signed-distance-function tree, gleval compiles it
+# for CPU evaluation on a grid or plane.
+gsdf: {
+  label: "gsdf\nSDF tree builder\n(soypat/gsdf)"
+  shape: hexagon
+  style.fill: "#fff3e0"
+}
+
+eval: {
+  label: "gleval.CPUSDF3\nCPU evaluator"
+  shape: hexagon
+  style.fill: "#fff3e0"
+}
+
+# Mesh renderers: convert the SDF to a triangle soup. Two algorithms; the 3MF
+# pipeline picks one via the -mesh flag.
+renderers: {
+  label: "Mesh renderers (glrender)"
+  style.fill: "#f3e5f5"
+
+  octree: {
+    label: "OctreeRenderer\nmarching cubes"
+    shape: hexagon
+    style.fill: "#ce93d8"
+  }
+  dc: {
+    label: "DualContourRenderer\ndual contouring"
+    shape: hexagon
+    style.fill: "#ce93d8"
+  }
+}
+
+# Optional post-processing: collapse fans of coplanar triangles back to single
+# polygons. Default for 3MF; cuts adaptor file size by ~95%.
+meshopt: {
+  label: "pkg/meshopt\nPlanarMerge\n(coplanar fan collapse)"
+  shape: hexagon
+  style.fill: "#fff3e0"
+}
+
+# Cross-section path: marching squares on a slice plane through the SDF.
+svgslice: {
+  label: "pkg/svgslice\nmarching squares\non slice plane\n+ dimension labels"
+  shape: hexagon
+  style.fill: "#fff3e0"
+}
+
+writers: {
+  label: "Writers"
+  style.fill: "#e8f5e9"
+
+  stl: {
+    label: "gsdfaux\nWriteBinarySTL"
+    shape: step
+    style.fill: "#81c784"
+  }
+  threemf: {
+    label: "gsdf-3mf\n(parts + colour\nmetadata)"
+    shape: step
+    style.fill: "#81c784"
+  }
+  svgwrite: {
+    label: "svgslice.WriteSlice\n(SVG <path>)"
+    shape: step
+    style.fill: "#81c784"
+  }
+}
+
+# Final artefacts written into docs/ for the static site and for download.
+artifacts: {
+  label: "Artefacts (docs/)"
+  style.fill: "#fce4ec"
+
+  stl_file: {
+    label: "*.stl\nbinary STL\n(slicer / print)"
+    shape: page
+    style.fill: "#f06292"
+  }
+  threemf_file: {
+    label: "*.3mf\nzipped XML\n(colour + browser)"
+    shape: page
+    style.fill: "#f06292"
+  }
+  svg_file: {
+    label: "*_cutaway_*.svg\naxial / top /\noff-axis slices"
+    shape: page
+    style.fill: "#f06292"
+  }
+}
+
+# Build-time entry points
+task_v0: {
+  label: "task v0\n(Taskfile.yml)"
+  shape: oval
+  style.fill: "#bbdefb"
+}
+
+# Wiring
+task_v0 -> source.main: "go run ."
+source.fasteners_lib -> source.geometry: "screws"
+source.geometry -> gsdf: "build SDF\nshapes"
+source.main -> gsdf: "Builder"
+
+gsdf -> eval: "compile"
+eval -> svgslice: "evaluate\non plane"
+eval -> renderers.octree: "evaluate\non 3D grid"
+eval -> renderers.dc: "evaluate\non 3D grid"
+
+# STL path: octree only.
+renderers.octree -> writers.stl: "-out=stl|all"
+
+# 3MF paths: three mesher options selected by -mesh.
+renderers.octree -> writers.threemf: "-mesh=octree"
+renderers.dc -> writers.threemf: "-mesh=dc"
+renderers.dc -> meshopt: "-mesh=merge\n(default)"
+meshopt -> writers.threemf
+
+# SVG path: marching squares contour → labelled SVG.
+svgslice -> writers.svgwrite
+
+# Outputs
+writers.stl -> artifacts.stl_file
+writers.threemf -> artifacts.threemf_file
+writers.svgwrite -> artifacts.svg_file
+
+# Legend
+legend: {
+  label: "Legend"
+  near: bottom-right
+  style.fill: "#fafafa"
+
+  l1: {
+    label: "Source code"
+    style.fill: "#e3f2fd"
+  }
+  l2: {
+    label: "Library"
+    style.fill: "#fff3e0"
+  }
+  l3: {
+    label: "Renderer"
+    style.fill: "#ce93d8"
+  }
+  l4: {
+    label: "Writer"
+    style.fill: "#81c784"
+  }
+  l5: {
+    label: "Output file"
+    style.fill: "#f06292"
+  }
+}

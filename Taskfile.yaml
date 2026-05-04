@@ -5,10 +5,18 @@ version: '3'
 vars:
   GREETING: Hello, World!
 
+includes:
+  um:
+    taskfile: ./cmd/UniversalMount/Taskfile.yml
+    dir: ./cmd/UniversalMount
+  fasteners:
+    taskfile: ./cmd/fasteners/Taskfile.yml
+    dir: ./cmd/fasteners
+
 tasks:
   default:
     cmds:
-      - echo "{{.GREETING}}"
+      - task --list-all
     silent: true
 
   fd:
@@ -22,3 +30,44 @@ tasks:
     cmds:
       - go run .
     # silent: true
+
+  docs:diagram:
+    desc: Render process-flow.d2 to SVG (only if the d2 source changed)
+    method: timestamp
+    sources:
+      - 'process-flow.d2'
+    generates:
+      - 'docs/process-flow.svg'
+    cmds:
+      - mkdir -p docs
+      - d2 process-flow.d2 docs/process-flow.svg
+
+  docs:build:
+    desc: Build the full documentation site to docs/
+    deps: [um:docs:build, fasteners:docs:build, docs:diagram]
+    cmds:
+      - mkdir -p docs/universal-mount docs/fasteners docs/js
+      - cp -r cmd/UniversalMount/docs/. docs/universal-mount/
+      - cp -r cmd/fasteners/docs/. docs/fasteners/
+      - cp web/*.js docs/js/
+      - cp -r web/three docs/js/
+      - test -f web/favicon.svg && cp web/favicon.svg docs/ || true
+      - cp process-flow.d2 docs/
+      - task-plus md2html --file index.md --dst docs --label "go3dp" --no-breadcrumbs
+      - task-plus md2html --file README.md --dst docs --label "go3dp" --no-breadcrumbs
+      - task-plus md2html --file ROADMAP.md --dst docs --label "go3dp" --no-breadcrumbs
+      - task-plus md2html --file process-flow.md --dst docs --label "go3dp" --no-breadcrumbs
+
+  docs:fetch-three:
+    desc: Download self-hosted Three.js modules into web/three/ (one-time / on update)
+    cmds:
+      - mkdir -p web/three/addons/loaders web/three/addons/controls web/three/addons/libs
+      - curl -sSfo web/three/three.module.js https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js
+      - curl -sSfo web/three/addons/loaders/3MFLoader.js https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/loaders/3MFLoader.js
+      - curl -sSfo web/three/addons/controls/OrbitControls.js https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js
+      - curl -sSfo web/three/addons/libs/fflate.module.js https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/libs/fflate.module.js
+
+  docs:clean:
+    desc: Remove generated docs/ tree
+    cmds:
+      - rm -rf docs cmd/UniversalMount/docs cmd/fasteners/docs
