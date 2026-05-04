@@ -23,7 +23,7 @@ import (
 func main() {
 	var (
 		size   = flag.String("size", "m", "v0 size: xs, s, m, l, all")
-		part   = flag.String("part", "all", "v0 part: block, cover, adaptor, all")
+		part   = flag.String("part", "all", "v0 part: block, blockcut, cover, stage1, adaptor, all")
 		out    = flag.String("out", "stl", "output kind: stl, svg, 3mf, all")
 		resDiv = flag.Uint("resdiv", 200, "resolution = bounding-box diagonal / resdiv (mesh outputs)")
 		mesh   = flag.String("mesh", "merge", "3MF mesher: octree (marching cubes), dc (dual contouring), merge (DC + planar merge, default)")
@@ -46,7 +46,7 @@ func run(sizeArg, partArg, out string, resDiv uint, mesh string) error {
 	if err != nil {
 		return err
 	}
-	wantBlock, wantCover, wantAdaptor, wantAssembly, err := selectParts(partArg)
+	wantBlock, wantBlockCut, wantCover, wantStage1, wantAdaptor, wantAssembly, err := selectParts(partArg)
 	if err != nil {
 		return err
 	}
@@ -63,9 +63,19 @@ func run(sizeArg, partArg, out string, resDiv uint, mesh string) error {
 				return fmt.Errorf("%s block: %w", sz.Name, err)
 			}
 		}
+		if wantBlockCut {
+			if err := buildPart(sz, "blockcut", V0BlockCutDefault, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
+				return fmt.Errorf("%s blockcut: %w", sz.Name, err)
+			}
+		}
 		if wantCover {
-			if err := buildPart(sz, "cover", V0Cover, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
+			if err := buildPart(sz, "cover", V0CoverDefault, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
 				return fmt.Errorf("%s cover: %w", sz.Name, err)
+			}
+		}
+		if wantStage1 {
+			if err := buildPart(sz, "stage1", V0Stage1, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
+				return fmt.Errorf("%s stage1: %w", sz.Name, err)
 			}
 		}
 		if wantAdaptor {
@@ -82,22 +92,26 @@ func run(sizeArg, partArg, out string, resDiv uint, mesh string) error {
 	return nil
 }
 
-func selectParts(arg string) (block, cover, adaptor, assembly bool, err error) {
+func selectParts(arg string) (block, blockCut, cover, stage1, adaptor, assembly bool, err error) {
 	switch arg {
 	case "block":
-		return true, false, false, false, nil
+		return true, false, false, false, false, false, nil
+	case "blockcut":
+		return false, true, false, false, false, false, nil
 	case "cover":
-		return false, true, false, false, nil
+		return false, false, true, false, false, false, nil
+	case "stage1":
+		return false, false, false, true, false, false, nil
 	case "adaptor":
-		return false, false, true, false, nil
+		return false, false, false, false, true, false, nil
 	case "assembly":
-		return false, false, false, true, nil
+		return false, false, false, false, false, true, nil
 	case "all":
-		return true, true, true, false, nil // assembly is opt-in (debug only)
+		return true, true, true, false, true, false, nil // stage1 (docs render) and assembly are opt-in
 	case "both": // legacy: block + cover
-		return true, true, false, false, nil
+		return true, false, true, false, false, false, nil
 	default:
-		return false, false, false, false, fmt.Errorf("unknown -part %q (try block, cover, adaptor, assembly, all)", arg)
+		return false, false, false, false, false, false, fmt.Errorf("unknown -part %q (try block, blockcut, cover, stage1, adaptor, assembly, all)", arg)
 	}
 }
 

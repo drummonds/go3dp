@@ -144,6 +144,21 @@ tasks:
     cmds:
       - go run . -size=all -part=block -out=all
 
+  v0:blockcut:
+    desc: All sizes, blockcut (negative volume to subtract from a host) only
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*_blockcut.stl'
+      - 'v0-*_blockcut.3mf'
+      - 'v0-*_blockcut_*.svg'
+    cmds:
+      - go run . -size=all -part=blockcut -out=all
+
   v0:cover:
     desc: All sizes, cover cap only
     method: timestamp
@@ -173,6 +188,21 @@ tasks:
       - 'v0-*_adaptor_*.svg'
     cmds:
       - go run . -size=all -part=adaptor -out=all
+
+  v0:stage1:
+    desc: All sizes, exploded block + blockcut documentation render only
+    method: timestamp
+    sources:
+      - '*.go'
+      - '../../pkg/fasteners/*.go'
+      - '../../pkg/svgslice/*.go'
+      - '../../pkg/meshopt/*.go'
+    generates:
+      - 'v0-*_stage1.stl'
+      - 'v0-*_stage1.3mf'
+      - 'v0-*_stage1_*.svg'
+    cmds:
+      - go run . -size=all -part=stage1 -out=all
 
   v1:
     desc: Build all v1 artifacts (placeholder; not yet implemented)

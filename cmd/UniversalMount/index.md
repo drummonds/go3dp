@@ -15,10 +15,11 @@ The first build target: a solid octagonal frustum block, fastened to a wall (or 
 
 All four sizes are 2 mm tall. The screw head is recessed 0.25 mm below the outer face so it cannot foul whatever sits against it. All sizes use the same Spax 3.5 × 16 wood screw (see the [parts catalogue](../fasteners/README.md)).
 
-Each size ships in three printable parts:
+Each size ships in three printable parts plus a non-printed negative volume for integration into other prints:
 
 - **Block** — small face on the wall, large face out. Fixed to the wall with countersunk wood screws.
-- **Cover cap** — large face down on the block, small face out. Stacks axially on the block; same screw-hole pattern, screws pass through both.
+- **Blockcut** *(negative volume, not printed)* — the cavity-and-slot shape to subtract from a host object (cup, holder, bracket) so a v0 block can slide into it laterally and lock at the centre. Octagonal frustum at the origin (block + per-face tolerance) unioned with a 45°-tapered slot extending +X to a flat square end. Use the STL or 3MF as a Boolean subtraction in CAD; the resulting cavity prints support-free in the same orientation as the block.
+- **Cover cap** — rectangular cuboid that slides laterally over a wall-mounted v0 block. Cavity matches `V0BlockCut` (octagonal recess + tapered slot extending +X). The +X face is the slide-in opening; the other four closed faces (-X, ±Y, +Z) carry 2.5 mm of wall material. Sits flush with the wall on z=0.
 - **Slide-on adaptor** *(first member of the adaptor family)* — a separate sleeve that slides laterally over the block and provides a flat surface for attachments. Open at one end, closed at the other with a half-octagonal cap, with the v0 mount captured inside via a cavity matching the v0 frustum + a per-material tolerance (0.15 mm per face for PLA at 0.4 mm nozzle / 0.2 mm layer height — see [V0AdaptorPLA](https://codeberg.org/hum3/go3dp/src/branch/main/cmd/UniversalMount/v0_adaptor.go) for the full preset). Future adaptor types (hooks, brackets, pipe saddles) will share the same pocket geometry but vary the outer "utility" portion.
 
 | Variant | Wall screws | Layout | Wi (wall) | Wo (room) | H |
@@ -58,6 +59,34 @@ Triangles are oriented with the first vertex at +Y (12 o'clock).
 <div class="column">
 
 <div class="model-viewer" data-model="v0-XS_block.3mf" style="height: 380px; width: 100%; border: 1px solid #ddd;"></div>
+
+</div>
+</div>
+
+#### Blockcut
+
+<div class="columns is-vcentered">
+<div class="column">
+
+**Cross section**
+
+![axial cutaway](v0-XS_blockcut_cutaway_axial.svg)
+
+**Top view (z = H/2)**
+
+![top cutaway](v0-XS_blockcut_cutaway_top.svg)
+
+**Downloads**
+
+- [STL](v0-XS_blockcut.stl) (subtract from host body)
+- [3MF](v0-XS_blockcut.3mf)
+- [Cross section SVG](v0-XS_blockcut_cutaway_axial.svg)
+- [Top view SVG](v0-XS_blockcut_cutaway_top.svg)
+
+</div>
+<div class="column">
+
+<div class="model-viewer" data-model="v0-XS_blockcut.3mf" style="height: 380px; width: 100%; border: 1px solid #ddd;"></div>
 
 </div>
 </div>
@@ -149,6 +178,39 @@ Triangles are oriented with the first vertex at +Y (12 o'clock).
 <div class="column">
 
 <div class="model-viewer" data-model="v0-S_block.3mf" style="height: 380px; width: 100%; border: 1px solid #ddd;"></div>
+
+</div>
+</div>
+
+#### Blockcut
+
+<div class="columns is-vcentered">
+<div class="column">
+
+**Cross section** (through Y = 0)
+
+![axial cutaway](v0-S_blockcut_cutaway_axial.svg)
+
+**Cross section** (through +Y screw at Y = 6)
+
+![axial cutaway through +Y screw](v0-S_blockcut_cutaway_screwY6.svg)
+
+**Top view (z = H/2)**
+
+![top cutaway](v0-S_blockcut_cutaway_top.svg)
+
+**Downloads**
+
+- [STL](v0-S_blockcut.stl) (subtract from host body)
+- [3MF](v0-S_blockcut.3mf)
+- [Cross section SVG (centre)](v0-S_blockcut_cutaway_axial.svg)
+- [Cross section SVG (screw)](v0-S_blockcut_cutaway_screwY6.svg)
+- [Top view SVG](v0-S_blockcut_cutaway_top.svg)
+
+</div>
+<div class="column">
+
+<div class="model-viewer" data-model="v0-S_blockcut.3mf" style="height: 380px; width: 100%; border: 1px solid #ddd;"></div>
 
 </div>
 </div>
@@ -254,6 +316,39 @@ Triangles are oriented with the first vertex at +Y (12 o'clock).
 </div>
 </div>
 
+#### Blockcut
+
+<div class="columns is-vcentered">
+<div class="column">
+
+**Cross section** (through Y = 0)
+
+![axial cutaway](v0-M_blockcut_cutaway_axial.svg)
+
+**Cross section** (through +Y vertex screw)
+
+![axial cutaway through +Y vertex](v0-M_blockcut_cutaway_screwY10.svg)
+
+**Top view (z = H/2)**
+
+![top cutaway](v0-M_blockcut_cutaway_top.svg)
+
+**Downloads**
+
+- [STL](v0-M_blockcut.stl) (subtract from host body)
+- [3MF](v0-M_blockcut.3mf)
+- [Cross section SVG (centre)](v0-M_blockcut_cutaway_axial.svg)
+- [Cross section SVG (vertex screw)](v0-M_blockcut_cutaway_screwY10.svg)
+- [Top view SVG](v0-M_blockcut_cutaway_top.svg)
+
+</div>
+<div class="column">
+
+<div class="model-viewer" data-model="v0-M_blockcut.3mf" style="height: 380px; width: 100%; border: 1px solid #ddd;"></div>
+
+</div>
+</div>
+
 #### Cover
 
 <div class="columns is-vcentered">
@@ -351,6 +446,39 @@ Triangles are oriented with the first vertex at +Y (12 o'clock).
 <div class="column">
 
 <div class="model-viewer" data-model="v0-L_block.3mf" style="height: 380px; width: 100%; border: 1px solid #ddd;"></div>
+
+</div>
+</div>
+
+#### Blockcut
+
+<div class="columns is-vcentered">
+<div class="column">
+
+**Cross section** (through Y = 0)
+
+![axial cutaway](v0-L_blockcut_cutaway_axial.svg)
+
+**Cross section** (through +Y vertex screw)
+
+![axial cutaway through +Y vertex](v0-L_blockcut_cutaway_screwY15.svg)
+
+**Top view (z = H/2)**
+
+![top cutaway](v0-L_blockcut_cutaway_top.svg)
+
+**Downloads**
+
+- [STL](v0-L_blockcut.stl) (subtract from host body)
+- [3MF](v0-L_blockcut.3mf)
+- [Cross section SVG (centre)](v0-L_blockcut_cutaway_axial.svg)
+- [Cross section SVG (vertex screw)](v0-L_blockcut_cutaway_screwY15.svg)
+- [Top view SVG](v0-L_blockcut_cutaway_top.svg)
+
+</div>
+<div class="column">
+
+<div class="model-viewer" data-model="v0-L_blockcut.3mf" style="height: 380px; width: 100%; border: 1px solid #ddd;"></div>
 
 </div>
 </div>

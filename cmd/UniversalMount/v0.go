@@ -61,50 +61,6 @@ var (
 	}
 )
 
-// Dovetail grooves cut into every V0 block's top face, providing the
-// universal slide-on interface. Same dimensions across all sizes so
-// any compatible tongue (on an adaptor or downstream object) mates
-// with any block. Two grooves run parallel to X, symmetric about Y=0,
-// with the wider face deeper in the block (z < H) and the narrower
-// opening flush with the top face at z = H.
-const (
-	DovetailWTop    = 2.0 // groove width at z=H (opening), mm
-	DovetailWBot    = 3.0 // groove width at z=H-DovetailDepth (wider, "at bottom"), mm
-	DovetailDepth   = 1.0 // vertical depth of the groove from the top face, mm
-	DovetailYOffset = 3.0 // distance from Y=0 to each groove centreline, mm
-)
-
-// dovetailGroove builds a dovetail-profile slot extruded along the X
-// axis. Cross-section in YZ: trapezoid with narrow opening (width wTop)
-// at the LOCAL Y=0 line and wider bottom (width wBot) at LOCAL Y=-depth.
-// The shape is centred on the origin in all three axes; caller translates
-// it so Y=0 of the polygon lands at the desired world Z (e.g., the block's
-// top face), and Y=±yOffset for the two parallel grooves.
-func dovetailGroove(bld *gsdf.Builder, wTop, wBot, depth, xExtent float32) (glbuild.Shader3D, error) {
-	if wBot < wTop {
-		return nil, fmt.Errorf("dovetailGroove: wBot %g must be >= wTop %g", wBot, wTop)
-	}
-	if wTop <= 0 || depth <= 0 || xExtent <= 0 {
-		return nil, fmt.Errorf("dovetailGroove: positive dimensions required")
-	}
-	// Polygon in builder XY: builder X is our world Y, builder Y is
-	// our world Z. A small overshoot above the opening (Y=+0.1) keeps
-	// the Difference clean against the top face.
-	profile := []ms2.Vec{
-		{X: -wTop / 2, Y: 0.1},
-		{X: +wTop / 2, Y: 0.1},
-		{X: +wBot / 2, Y: -depth},
-		{X: -wBot / 2, Y: -depth},
-	}
-	poly := bld.NewPolygon(profile)
-	prism := bld.Extrude(poly, xExtent)
-	// Rotate so builder X → world Y, builder Y → world Z, builder Z → world X.
-	// Two-step: π/2 about world X, then π/2 about world Z.
-	prism = bld.Rotate(prism, float32(math.Pi/2), ms3.Vec{X: 1})
-	prism = bld.Rotate(prism, float32(math.Pi/2), ms3.Vec{Z: 1})
-	return prism, nil
-}
-
 // triangleHoles returns three equally-spaced points on a circle of
 // radius r, with the first vertex at +Y (12 o'clock).
 func triangleHoles(r float32) []ms2.Vec {
@@ -117,56 +73,6 @@ func triangleHoles(r float32) []ms2.Vec {
 		}
 	}
 	return out
-}
-
-// V0Cover builds the matching cover cap for the given size: an inverted
-// octagonal frustum with the large face at z=0 (sits on the block) and
-// the small face at z=H (room-facing, visible). Screw cutouts are
-// positioned at the same (X,Y) as the block, with the head recess at
-// the visible (top) face and the shaft passing down through the cover
-// into the block below.
-//
-// Coordinates: large face at z=0, small face at z=H. The cover stacks
-// directly on top of a V0Block of the same size, so the combined Z
-// extent runs from 0 (wall) through H (block top = cover bottom) to 2H
-// (cover top, visible). When printed: the cover prints with its large
-// face on the build plate (the "z=0 face") so all overhangs stay ≤ 45°.
-func V0Cover(bld *gsdf.Builder, sz V0Size) (glbuild.Shader3D, error) {
-	if sz.Wo-sz.Wi != 2*sz.H {
-		return nil, fmt.Errorf("V0Cover %s: 45° rule violated (Wo=%v, Wi=%v, H=%v)",
-			sz.Name, sz.Wo, sz.Wi, sz.H)
-	}
-	if len(sz.Holes) == 0 {
-		return nil, fmt.Errorf("V0Cover %s: no screw holes specified", sz.Name)
-	}
-
-	// OctagonalFrustum produces small@z=0, large@z=H. We need
-	// large@z=0, small@z=H — i.e., flip in Z. Rotating π about X
-	// negates Y and Z; the octagon is symmetric so Y-flip is invisible.
-	// After rotation: small@z=0 (unchanged) → small@z=0; large@z=H → z=-H.
-	// Translate +H to put large@z=0 / small@z=H.
-	frustum, err := OctagonalFrustum(bld, sz.Wi, sz.Wo, sz.H)
-	if err != nil {
-		return nil, err
-	}
-	frustum = bld.Rotate(frustum, float32(math.Pi), ms3.Vec{X: 1})
-	frustum = bld.Translate(frustum, 0, 0, sz.H)
-
-	// Screw cutout: head at the top (z=H), shaft passing down to z=-0.5
-	// (overshoots z=0 for clean Difference). WallCutout has head@z=0,
-	// shaft → -z; translate +H to put head@z=H.
-	throughLen := sz.H + 0.5
-	cutTemplate, err := sz.Screw.WallCutout(bld, throughLen, sz.Recess)
-	if err != nil {
-		return nil, err
-	}
-	cutTemplate = bld.Translate(cutTemplate, 0, 0, sz.H)
-
-	for _, h := range sz.Holes {
-		c := bld.Translate(cutTemplate, h.X, h.Y, 0)
-		frustum = bld.Difference(frustum, c)
-	}
-	return frustum, nil
 }
 
 // V0Block builds the wall block: octagonal frustum (Wi at z=0, Wo at
@@ -237,19 +143,6 @@ func V0Block(bld *gsdf.Builder, sz V0Size) (glbuild.Shader3D, error) {
 	for _, h := range sz.Holes {
 		c := bld.Translate(cutTemplate, h.X, h.Y, 0)
 		block = bld.Difference(block, c)
-	}
-
-	// Two dovetail grooves on the top face running parallel to X — the
-	// universal slide-on interface. xExtent overshoots the block in X
-	// for a clean Difference at both ends.
-	xExtent := sz.Wo + 1.0
-	groove, err := dovetailGroove(bld, DovetailWTop, DovetailWBot, DovetailDepth, xExtent)
-	if err != nil {
-		return nil, fmt.Errorf("V0Block %s dovetail: %w", sz.Name, err)
-	}
-	for _, y0 := range []float32{-DovetailYOffset, +DovetailYOffset} {
-		g := bld.Translate(groove, 0, y0, sz.H)
-		block = bld.Difference(block, g)
 	}
 
 	return block, nil

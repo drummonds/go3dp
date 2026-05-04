@@ -67,9 +67,8 @@ func V0SlideOn(bld *gsdf.Builder, sz V0Size, p V0AdaptorParams) (glbuild.Shader3
 
 	// 1) Outer body — rectangular plan view, WallThickness uniform on
 	//    the -X, +Y, and -Y faces; +X is the slide-in opening (slot cut
-	//    from the cavity below). Drops the previous chamfered "flange"
-	//    corners now that retention is intended to come from a tongue-
-	//    and-groove against the block (TBD).
+	//    from the cavity below). Retention mechanism TBD while the
+	//    block geometry is being iterated.
 	xLeft := -woc/2 - p.WallThickness
 	xRight := woc/2 + p.LengthExtension
 	yHalf := woc/2 + p.WallThickness
