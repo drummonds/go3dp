@@ -15,6 +15,7 @@ import (
 
 	"github.com/deadsy/sdfx/render"
 	"github.com/deadsy/sdfx/sdf"
+	v3 "github.com/deadsy/sdfx/vec/v3"
 )
 
 //-----------------------------------------------------------------------------
@@ -43,7 +44,7 @@ func tubeCap() (sdf.SDF3, error) {
 	h = innerHeight
 	r = innerDiameter * 0.5
 	inner, err := sdf.Cylinder3D(h, r, 1.0)
-	inner = sdf.Transform3D(inner, sdf.Translate3d(sdf.V3{0, 0, wallThickness * 0.5}))
+	inner = sdf.Transform3D(inner, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: wallThickness * 0.5}))
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +59,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error: %s", err)
 	}
-	render.RenderSTL(sdf.ScaleUniform3D(c, shrink), 120, "cap.stl")
+	render.ToSTL(sdf.ScaleUniform3D(c, shrink), "cap.stl", render.NewMarchingCubesOctree(120))
 }
 
 //-----------------------------------------------------------------------------

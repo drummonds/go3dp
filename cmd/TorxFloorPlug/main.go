@@ -62,7 +62,7 @@ func cover(plugDiameter float64) (sdf.SDF3, error) {
 	if err != nil {
 		return nil, err
 	}
-	cover = sdf.Transform3D(cover, sdf.Translate3d(v3.Vec{0, 0, h / 2}))
+	cover = sdf.Transform3D(cover, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: h / 2}))
 	return cover, nil
 }
 
@@ -74,8 +74,8 @@ func extractor(recessHeight float64) (sdf.SDF3, error) {
 	if err != nil {
 		return nil, err
 	}
-	extractor = sdf.Transform3D(extractor, sdf.Translate3d(v3.Vec{-1, 0, recessHeight - h/2}))
-	extractor = sdf.Transform3D(extractor, sdf.Rotate3d(v3.Vec{0, 1, 0}, math.Pi/4))
+	extractor = sdf.Transform3D(extractor, sdf.Translate3d(v3.Vec{X: -1, Y: 0, Z: recessHeight - h/2}))
+	extractor = sdf.Transform3D(extractor, sdf.Rotate3d(v3.Vec{X: 0, Y: 1, Z: 0}, math.Pi/4))
 	return extractor, nil
 }
 
@@ -110,7 +110,7 @@ func torx(A, h float64) (sdf.SDF3, error) {
 	if err != nil {
 		return nil, err
 	}
-	torx = sdf.Transform3D(torx, sdf.Translate3d(v3.Vec{0, 0, h / 2}))
+	torx = sdf.Transform3D(torx, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: h / 2}))
 	return torx, nil
 }
 
@@ -145,7 +145,7 @@ func sizeArray() sdf.SDF3 {
 		if i != 0 {
 			offset += spec.plug + 2.0
 		}
-		sc = sdf.Transform3D(sc, sdf.Translate3d(v3.Vec{offset, 0, 0}))
+		sc = sdf.Transform3D(sc, sdf.Translate3d(v3.Vec{X: offset, Y: 0, Z: 0}))
 		if i == 0 {
 			result = sc
 		} else {
@@ -158,7 +158,7 @@ func sizeArray() sdf.SDF3 {
 func xArray(s sdf.SDF3, reps int, spacing float64) sdf.SDF3 {
 	var result sdf.SDF3
 	for i := 0; i < reps; i++ {
-		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{float64(i) * spacing, 0, 0}))
+		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{X: float64(i) * spacing, Y: 0, Z: 0}))
 		if i == 0 {
 			result = newS
 		} else {
@@ -171,7 +171,7 @@ func xArray(s sdf.SDF3, reps int, spacing float64) sdf.SDF3 {
 func yArray(s sdf.SDF3, reps int, spacing float64) sdf.SDF3 {
 	var result sdf.SDF3
 	for i := 0; i < reps; i++ {
-		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{0, float64(i) * spacing, 0}))
+		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{X: 0, Y: float64(i) * spacing, Z: 0}))
 		if i == 0 {
 			result = newS
 		} else {

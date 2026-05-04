@@ -1,3 +1,5 @@
+//go:build ignore
+
 // 0,0,0 = z= 0, centre of tip end
 package main
 

@@ -10,7 +10,6 @@ import (
 	"github.com/soypat/gsdf/glbuild"
 )
 
-
 // OctagonalFrustum builds an octagonal frustum aligned along Z.
 // The small face (across-flats = wInner) sits at z=0; the large face
 // (across-flats = wOuter) sits at z=h. The taper angle is set implicitly

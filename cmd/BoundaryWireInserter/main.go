@@ -62,7 +62,7 @@ func boundaryInserter(length float64) sdf.SDF3 {
 func xArray(s sdf.SDF3, reps int, spacing float64) sdf.SDF3 {
 	var result sdf.SDF3
 	for i := 0; i < reps; i++ {
-		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{float64(i) * spacing, 0, 0}))
+		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{X: float64(i) * spacing, Y: 0, Z: 0}))
 		if i == 0 {
 			result = newS
 		} else {
@@ -75,7 +75,7 @@ func xArray(s sdf.SDF3, reps int, spacing float64) sdf.SDF3 {
 func yArray(s sdf.SDF3, reps int, spacing float64) sdf.SDF3 {
 	var result sdf.SDF3
 	for i := 0; i < reps; i++ {
-		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{0, float64(i) * spacing, 0}))
+		newS := sdf.Transform3D(s, sdf.Translate3d(v3.Vec{X: 0, Y: float64(i) * spacing, Z: 0}))
 		if i == 0 {
 			result = newS
 		} else {

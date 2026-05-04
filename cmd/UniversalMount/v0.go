@@ -43,24 +43,21 @@ var (
 	}
 	V0_S = V0Size{
 		Name: "v0-S", Wi: 22, Wo: 27, H: 2.5,
-		Screw:         fasteners.Spax3_5x16,
-		Holes:         []ms2.Vec{{X: 0, Y: 6}, {X: 0, Y: -6}},
-		Recess:        0.25,
-
+		Screw:  fasteners.Spax3_5x16,
+		Holes:  []ms2.Vec{{X: 0, Y: 6}, {X: 0, Y: -6}},
+		Recess: 0.25,
 	}
 	V0_M = V0Size{
 		Name: "v0-M", Wi: 30, Wo: 35, H: 2.5,
-		Screw:         fasteners.Spax3_5x16,
-		Holes:         triangleHoles(10),
-		Recess:        0.25,
-
+		Screw:  fasteners.Spax3_5x16,
+		Holes:  triangleHoles(10),
+		Recess: 0.25,
 	}
 	V0_L = V0Size{
 		Name: "v0-L", Wi: 40, Wo: 45, H: 2.5,
-		Screw:         fasteners.Spax3_5x16,
-		Holes:         triangleHoles(15),
-		Recess:        0.25,
-
+		Screw:  fasteners.Spax3_5x16,
+		Holes:  triangleHoles(15),
+		Recess: 0.25,
 	}
 )
 

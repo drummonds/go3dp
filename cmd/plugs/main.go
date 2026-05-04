@@ -20,6 +20,7 @@ import (
 
 	"github.com/deadsy/sdfx/render"
 	"github.com/deadsy/sdfx/sdf"
+	v3 "github.com/deadsy/sdfx/vec/v3"
 )
 
 //-----------------------------------------------------------------------------
@@ -97,7 +98,7 @@ func screwModel() (sdf.SDF3, error) {
 	h := depth - bottomThickness
 	r := innerDiameter * 0.5
 	screw, err := sdf.Cone3D(h, 0.5, r, 0)
-		screw = sdf.Transform3D(screw, sdf.Translate3d(sdf.V3{0, 0, 0.5}))
+	screw = sdf.Transform3D(screw, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: 0.5}))
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +111,7 @@ func split() (sdf.SDF3, error) {
 	h := depth - bottomThickness
 	r := innerDiameter * 0.5
 	screw, err := sdf.Cone3D(h, 0.5, r, 0)
-	screw = sdf.Transform3D(screw, sdf.Translate3d(sdf.V3{0, 0, 0.5}))
+	screw = sdf.Transform3D(screw, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: 0.5}))
 	if err != nil {
 		return nil, err
 	}
@@ -135,12 +136,12 @@ func knurledFinger() (sdf.SDF3, error) {
 	return sCombo, nil
 }
 
-//Tool to make sure the holes are deep enough
+// Tool to make sure the holes are deep enough
 func depthGauge() (sdf.SDF3, error) {
 	head, _ := sdf.Cylinder3D(10, 8*0.5, 0.0)
-	head = sdf.Transform3D(head, sdf.Translate3d(sdf.V3{0, 0, 15}))
+	head = sdf.Transform3D(head, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: 15}))
 	tip, _ := sdf.Cylinder3D(depth, outerDiameter*0.5, 0)
-	tip = sdf.Transform3D(tip, sdf.Translate3d(sdf.V3{0, 0, 2 + 30 - depth}))
+	tip = sdf.Transform3D(tip, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: 2 + 30 - depth}))
 	finger, _ := knurledFinger()
 	sCombo := sdf.Union3D(tip, head, finger)
 
@@ -151,11 +152,11 @@ func depthGauge() (sdf.SDF3, error) {
 // Tool to push the plastic plugs into the holes
 func pusher() (sdf.SDF3, error) {
 	head, _ := sdf.Cylinder3D(10, 8*0.5, 0.0)
-	head = sdf.Transform3D(head, sdf.Translate3d(sdf.V3{0, 0, 15}))
+	head = sdf.Transform3D(head, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: 15}))
 	h := depth - bottomThickness
 	r := innerDiameter * 0.5
 	tip, _ := sdf.Cone3D(h, r, 0.5, 0)
-	tip = sdf.Transform3D(tip, sdf.Translate3d(sdf.V3{0, 0, 30 - h}))
+	tip = sdf.Transform3D(tip, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: 30 - h}))
 	finger, _ := knurledFinger()
 	sCombo := sdf.Union3D(tip, head, finger)
 
@@ -165,20 +166,20 @@ func pusher() (sdf.SDF3, error) {
 
 // This is a splitter to allow screw to break apart plug as it bites it
 func divider() (sdf.SDF3, error) {
-	box, err := sdf.Box3D(sdf.V3{0.2, 10, 10}, 0)
+	box, err := sdf.Box3D(v3.Vec{X: 0.2, Y: 10, Z: 10}, 0)
 	if err != nil {
 		return box, err
 	}
-	box = sdf.Transform3D(box, sdf.Translate3d(sdf.V3{-0.1, 0, bottomThickness + depth/2}))
+	box = sdf.Transform3D(box, sdf.Translate3d(v3.Vec{X: -0.1, Y: 0, Z: bottomThickness + depth/2}))
 	return box, nil
 }
 
-//Tool to around drill to prevent drilling to deep
+// Tool to around drill to prevent drilling to deep
 func collet() (sdf.SDF3, error) {
 	length := 50 - depth
 	finger, _ := knurledFinger()
 	head, _ := sdf.Cylinder3D(length-20, 8*0.5, 0.0)
-	head = sdf.Transform3D(head, sdf.Translate3d(sdf.V3{0, 0, 15}))
+	head = sdf.Transform3D(head, sdf.Translate3d(v3.Vec{X: 0, Y: 0, Z: 15}))
 	drill, _ := sdf.Cylinder3D(length+10, 0.15+outerDiameter*0.5, 0)
 	sCombo := sdf.Union3D(head, finger)
 	sCombo = sdf.Difference3D(sCombo, drill)
@@ -219,8 +220,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("error: %s", err)
 	}
-	render.RenderSTL(sdf.ScaleUniform3D(c, shrink), 240,
-		fmt.Sprintf("/mnt/c/t/%s.stl", fn))
+	render.ToSTL(sdf.ScaleUniform3D(c, shrink),
+		fmt.Sprintf("/mnt/c/t/%s.stl", fn),
+		render.NewMarchingCubesOctree(240))
 }
 
 // func main() {

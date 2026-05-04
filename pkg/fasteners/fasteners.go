@@ -17,27 +17,27 @@ package fasteners
 type Head uint8
 
 const (
-	HeadCountersunk        Head = iota // 90° conical, sits flush
-	HeadRaisedCountersunk              // dome on a 90° cone (oval)
-	HeadPan                            // domed cylinder
-	HeadRound                          // hemispherical
-	HeadHex                            // external hex (bolt)
-	HeadHexFlange                      // hex with integral washer
-	HeadButton                         // low-profile dome
-	HeadCheese                         // tall straight-sided cylinder
+	HeadCountersunk       Head = iota // 90° conical, sits flush
+	HeadRaisedCountersunk             // dome on a 90° cone (oval)
+	HeadPan                           // domed cylinder
+	HeadRound                         // hemispherical
+	HeadHex                           // external hex (bolt)
+	HeadHexFlange                     // hex with integral washer
+	HeadButton                        // low-profile dome
+	HeadCheese                        // tall straight-sided cylinder
 )
 
 // Drive is the recess shape used to apply torque.
 type Drive uint8
 
 const (
-	DriveSlot     Drive = iota // single straight slot
-	DrivePhillips              // cruciform (Phillips H)
-	DrivePozidriv              // cruciform with extra ribs (Pz)
-	DriveTorx                  // 6-point star (TX)
-	DriveHexSocket             // internal hex (Allen)
-	DriveRobertson             // square
-	DriveNone                  // no drive (e.g. external hex bolt)
+	DriveSlot      Drive = iota // single straight slot
+	DrivePhillips               // cruciform (Phillips H)
+	DrivePozidriv               // cruciform with extra ribs (Pz)
+	DriveTorx                   // 6-point star (TX)
+	DriveHexSocket              // internal hex (Allen)
+	DriveRobertson              // square
+	DriveNone                   // no drive (e.g. external hex bolt)
 )
 
 // ThreadKind classifies the threadform.
