@@ -57,10 +57,10 @@ func TestComposite_HostMinusInsertPlusPart(t *testing.T) {
 	//    Tolerance grows the unit cube by Radial on each side)
 	//  - unioned part spans [3.5, 4.5] in x (unit cube at offset 4)
 	d := evalAt(t, out,
-		ms3.Vec{X: 0, Y: 0, Z: 0},   // origin: in host AND in insert hole → void
-		ms3.Vec{X: 1, Y: 0, Z: 0},   // in host, outside insert hole → solid
-		ms3.Vec{X: 4, Y: 0, Z: 0},   // centre of unioned part → solid
-		ms3.Vec{X: 6, Y: 0, Z: 0},   // outside host, outside part → void
+		ms3.Vec{X: 0, Y: 0, Z: 0}, // origin: in host AND in insert hole → void
+		ms3.Vec{X: 1, Y: 0, Z: 0}, // in host, outside insert hole → solid
+		ms3.Vec{X: 4, Y: 0, Z: 0}, // centre of unioned part → solid
+		ms3.Vec{X: 6, Y: 0, Z: 0}, // outside host, outside part → void
 	)
 	if d[0] <= 0 {
 		t.Errorf("(0,0,0) inside insert hole: dist=%g, want >0 (void)", d[0])

@@ -675,8 +675,8 @@ func autoDimensions(segs []seg, scale float32) []Dimension {
 			}
 		}
 	}
-	off := 3 * scale     // dim line offset from contour
-	font := 2.5 * scale  // matches gizmo + footer
+	off := 3 * scale    // dim line offset from contour
+	font := 2.5 * scale // matches gizmo + footer
 	w := max.X - min.X
 	h := max.Y - min.Y
 	return []Dimension{
