@@ -17,3 +17,4 @@ cmd/fasteners/*.svg
 
 .vscode/
 .claude/
+.task/

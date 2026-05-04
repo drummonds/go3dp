@@ -8,6 +8,7 @@ import (
 
 	threemf "codeberg.org/hum3/gsdf-3mf"
 
+	"codeberg.org/hum3/go3dp/pkg/meshopt"
 	"codeberg.org/hum3/go3dp/pkg/svgslice"
 
 	"github.com/soypat/geometry/ms2"
@@ -25,20 +26,27 @@ func main() {
 		part   = flag.String("part", "all", "v0 part: block, cover, adaptor, all")
 		out    = flag.String("out", "stl", "output kind: stl, svg, 3mf, all")
 		resDiv = flag.Uint("resdiv", 200, "resolution = bounding-box diagonal / resdiv (mesh outputs)")
+		mesh   = flag.String("mesh", "merge", "3MF mesher: octree (marching cubes), dc (dual contouring), merge (DC + planar merge, default)")
 	)
 	flag.Parse()
 
-	if err := run(*size, *part, *out, *resDiv); err != nil {
+	if err := run(*size, *part, *out, *resDiv, *mesh); err != nil {
 		log.Fatalf("error: %v", err)
 	}
 }
 
-func run(sizeArg, partArg, out string, resDiv uint) error {
+func run(sizeArg, partArg, out string, resDiv uint, mesh string) error {
+	switch mesh {
+	case "octree", "dc", "merge":
+	default:
+		return fmt.Errorf("unknown -mesh %q (try octree, dc, merge)", mesh)
+	}
+
 	sizes, err := selectSizes(sizeArg)
 	if err != nil {
 		return err
 	}
-	wantBlock, wantCover, wantAdaptor, err := selectParts(partArg)
+	wantBlock, wantCover, wantAdaptor, wantAssembly, err := selectParts(partArg)
 	if err != nil {
 		return err
 	}
@@ -51,38 +59,45 @@ func run(sizeArg, partArg, out string, resDiv uint) error {
 
 	for _, sz := range sizes {
 		if wantBlock {
-			if err := buildPart(sz, "block", V0Block, wantSTL, wantSVG, want3MF, resDiv); err != nil {
+			if err := buildPart(sz, "block", V0Block, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
 				return fmt.Errorf("%s block: %w", sz.Name, err)
 			}
 		}
 		if wantCover {
-			if err := buildPart(sz, "cover", V0Cover, wantSTL, wantSVG, want3MF, resDiv); err != nil {
+			if err := buildPart(sz, "cover", V0Cover, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
 				return fmt.Errorf("%s cover: %w", sz.Name, err)
 			}
 		}
 		if wantAdaptor {
-			if err := buildPart(sz, "adaptor", V0SlideOnPLA, wantSTL, wantSVG, want3MF, resDiv); err != nil {
+			if err := buildPart(sz, "adaptor", V0SlideOnPLA, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
 				return fmt.Errorf("%s adaptor: %w", sz.Name, err)
+			}
+		}
+		if wantAssembly {
+			if err := buildPart(sz, "assembly", V0Assembly, wantSTL, wantSVG, want3MF, resDiv, mesh); err != nil {
+				return fmt.Errorf("%s assembly: %w", sz.Name, err)
 			}
 		}
 	}
 	return nil
 }
 
-func selectParts(arg string) (block, cover, adaptor bool, err error) {
+func selectParts(arg string) (block, cover, adaptor, assembly bool, err error) {
 	switch arg {
 	case "block":
-		return true, false, false, nil
+		return true, false, false, false, nil
 	case "cover":
-		return false, true, false, nil
+		return false, true, false, false, nil
 	case "adaptor":
-		return false, false, true, nil
+		return false, false, true, false, nil
+	case "assembly":
+		return false, false, false, true, nil
 	case "all":
-		return true, true, true, nil
+		return true, true, true, false, nil // assembly is opt-in (debug only)
 	case "both": // legacy: block + cover
-		return true, true, false, nil
+		return true, true, false, false, nil
 	default:
-		return false, false, false, fmt.Errorf("unknown -part %q (try block, cover, adaptor, all)", arg)
+		return false, false, false, false, fmt.Errorf("unknown -part %q (try block, cover, adaptor, assembly, all)", arg)
 	}
 }
 
@@ -105,7 +120,7 @@ func selectSizes(arg string) ([]V0Size, error) {
 
 type partBuilder func(*gsdf.Builder, V0Size) (glbuild.Shader3D, error)
 
-func buildPart(sz V0Size, partLabel string, build partBuilder, wantSTL, wantSVG, want3MF bool, resDiv uint) error {
+func buildPart(sz V0Size, partLabel string, build partBuilder, wantSTL, wantSVG, want3MF bool, resDiv uint, mesh string) error {
 	var bld gsdf.Builder
 	shape, err := build(&bld, sz)
 	if err != nil {
@@ -122,7 +137,7 @@ func buildPart(sz V0Size, partLabel string, build partBuilder, wantSTL, wantSVG,
 		}
 	}
 	if want3MF {
-		if err := write3MF(shape, baseName+".3mf", sz.Name+" "+partLabel, resDiv); err != nil {
+		if err := write3MF(shape, baseName+".3mf", sz.Name+" "+partLabel, resDiv, mesh); err != nil {
 			return fmt.Errorf("3MF: %w", err)
 		}
 	}
@@ -134,7 +149,7 @@ func buildPart(sz V0Size, partLabel string, build partBuilder, wantSTL, wantSVG,
 	return nil
 }
 
-func write3MF(shape glbuild.Shader3D, filename, partName string, resDiv uint) error {
+func write3MF(shape glbuild.Shader3D, filename, partName string, resDiv uint, mesh string) error {
 	if err := glbuild.ShortenNames3D(&shape, 12); err != nil {
 		return fmt.Errorf("shorten names: %w", err)
 	}
@@ -146,13 +161,20 @@ func write3MF(shape glbuild.Shader3D, filename, partName string, resDiv uint) er
 	cpusdf.VecPool().SetMinAllocationLen(bufSize)
 
 	resolution := shape.Bounds().Diagonal() / float32(resDiv)
-	renderer, err := glrender.NewOctreeRenderer(cpusdf, resolution, bufSize)
+	tris, err := renderTriangles(cpusdf, resolution, mesh, bufSize)
 	if err != nil {
-		return fmt.Errorf("octree: %w", err)
+		return err
 	}
-	tris, err := glrender.RenderAll(renderer, cpusdf.VecPool())
-	if err != nil {
-		return fmt.Errorf("render: %w", err)
+	rawN := len(tris)
+	if mesh == "merge" {
+		// Tolerances scaled to mesh resolution: a face is considered planar
+		// if its normals match within ~1° and offsets within res/20, and
+		// loop vertices closer than res/100 to their neighbours' line are
+		// dropped as collinear inserts.
+		tris = meshopt.PlanarMerge(tris, meshopt.Options{
+			VertexTol: resolution / 100,
+			OffsetTol: resolution / 20,
+		})
 	}
 	f, err := os.Create(filename)
 	if err != nil {
@@ -167,8 +189,39 @@ func write3MF(shape glbuild.Shader3D, filename, partName string, resDiv uint) er
 	if err := threemf.Write(f, parts, threemf.UnitMillimeter); err != nil {
 		return err
 	}
-	fmt.Printf("wrote %s (%d triangles)\n", filename, len(tris))
+	if mesh == "merge" {
+		fmt.Printf("wrote %s (%d triangles, %d after planar merge)\n", filename, rawN, len(tris))
+	} else {
+		fmt.Printf("wrote %s (%d triangles, mesher=%s)\n", filename, len(tris), mesh)
+	}
 	return nil
+}
+
+func renderTriangles(cpusdf *gleval.SDF3CPU, resolution float32, mesh string, bufSize int) ([]ms3.Triangle, error) {
+	switch mesh {
+	case "octree":
+		r, err := glrender.NewOctreeRenderer(cpusdf, resolution, bufSize)
+		if err != nil {
+			return nil, fmt.Errorf("octree: %w", err)
+		}
+		tris, err := glrender.RenderAll(r, cpusdf.VecPool())
+		if err != nil {
+			return nil, fmt.Errorf("render: %w", err)
+		}
+		return tris, nil
+	case "dc", "merge":
+		var dcr glrender.DualContourRenderer
+		if err := dcr.Reset(cpusdf, resolution, &glrender.DualContourLeastSquares{}, cpusdf.VecPool()); err != nil {
+			return nil, fmt.Errorf("dual contour reset: %w", err)
+		}
+		tris, err := dcr.RenderAll(nil, cpusdf.VecPool())
+		if err != nil {
+			return nil, fmt.Errorf("render: %w", err)
+		}
+		return tris, nil
+	default:
+		return nil, fmt.Errorf("unknown mesher %q", mesh)
+	}
 }
 
 func writeSTL(shape glbuild.Shader3D, filename string, resDiv uint) error {
@@ -211,7 +264,7 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 		UMin:   bb.Min.X - pad, UMax: bb.Max.X + pad,
 		VMin: bb.Min.Z - pad, VMax: bb.Max.Z + pad,
 	}
-	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_axial.svg", sdf3, axial, 256, 256, axialLabels(sz)); err != nil {
+	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_axial.svg", sdf3, axial, 256, 256, nil, axialDimensions(sz)...); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s_cutaway_axial.svg\n", baseName)
@@ -220,11 +273,27 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 		offAxis := axial
 		offAxis.Origin = ms3.Vec{Y: y}
 		name := fmt.Sprintf("%s_cutaway_screwY%g.svg", baseName, y)
-		if err := svgslice.WriteSliceLabelled(name, sdf3, offAxis, 256, 256, axialLabels(sz)); err != nil {
+		if err := svgslice.WriteSliceLabelled(name, sdf3, offAxis, 256, 256, nil, axialDimensions(sz)...); err != nil {
 			return err
 		}
 		fmt.Printf("wrote %s\n", name)
 	}
+
+	// YZ slice (third orthogonal axis) — looking from +X toward -X.
+	// For symmetric parts (block, cover) the silhouette matches the
+	// axial XZ slice, so reuse axialDimensions; for the adaptor the
+	// numbers are wrong but at least the shape is informative.
+	side := svgslice.Plane{
+		Origin: ms3.Vec{},
+		U:      ms3.Vec{Y: 1},
+		V:      ms3.Vec{Z: 1},
+		UMin:   bb.Min.Y - pad, UMax: bb.Max.Y + pad,
+		VMin: bb.Min.Z - pad, VMax: bb.Max.Z + pad,
+	}
+	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_side.svg", sdf3, side, 256, 256, nil, axialDimensions(sz)...); err != nil {
+		return err
+	}
+	fmt.Printf("wrote %s_cutaway_side.svg\n", baseName)
 
 	midZ := (bb.Min.Z + bb.Max.Z) / 2
 	top := svgslice.Plane{
@@ -234,40 +303,80 @@ func writeSVGCutaways(shape glbuild.Shader3D, baseName string, sz V0Size) error 
 		UMin:   bb.Min.X - pad, UMax: bb.Max.X + pad,
 		VMin: bb.Min.Y - pad, VMax: bb.Max.Y + pad,
 	}
-	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_top.svg", sdf3, top, 256, 256, topLabels(sz)); err != nil {
+	if err := svgslice.WriteSliceLabelled(baseName+"_cutaway_top.svg", sdf3, top, 256, 256, nil, topDimensions(sz)...); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s_cutaway_top.svg\n", baseName)
 	return nil
 }
 
-// axialLabels annotates the axial cutaway with Wi / Wo / H.
+// axialDimensions annotates the axial cutaway with Wo (top), Wi
+// (bottom), and H (right side) dimension lines.
 //
 // Plane is U=X, V=Z. Block trapezoid: small face Wi at v=0 (wall,
 // bottom of SVG), large face Wo at v=H (top of SVG). Cover is the
-// inverse: Wo at v=0, Wi at v=H. The same labels work for either
-// because the trapezoid silhouette is identical, just up/down-flipped.
-func axialLabels(sz V0Size) []svgslice.Label {
+// inverse: Wo at v=0, Wi at v=H. The same dimension positions work
+// for either because the trapezoid silhouette is identical, just
+// up/down-flipped.
+func axialDimensions(sz V0Size) []svgslice.Dimension {
 	wMax := sz.Wo
 	if sz.Wi > wMax {
 		wMax = sz.Wi
 	}
-	side := wMax/2 + 1.5 // right of the part outline
-	return []svgslice.Label{
-		{U: 0, V: sz.H + 1.0, Text: fmt.Sprintf("Wo = %g mm", sz.Wo)},
-		{U: 0, V: -1.0, Text: fmt.Sprintf("Wi = %g mm", sz.Wi)},
-		{U: side, V: sz.H / 2, Text: fmt.Sprintf("H = %g", sz.H), Anchor: "start"},
+	const dimGap = 1.5 // perpendicular gap from feature to dim line, mm
+	side := wMax/2 + dimGap
+	return []svgslice.Dimension{
+		{ // Wo across the top face
+			From:    ms2.Vec{X: -sz.Wo / 2, Y: sz.H},
+			To:      ms2.Vec{X: +sz.Wo / 2, Y: sz.H},
+			DimFrom: ms2.Vec{X: -sz.Wo / 2, Y: sz.H + dimGap},
+			DimTo:   ms2.Vec{X: +sz.Wo / 2, Y: sz.H + dimGap},
+		},
+		{ // Wi across the bottom face
+			From:    ms2.Vec{X: -sz.Wi / 2, Y: 0},
+			To:      ms2.Vec{X: +sz.Wi / 2, Y: 0},
+			DimFrom: ms2.Vec{X: -sz.Wi / 2, Y: -dimGap},
+			DimTo:   ms2.Vec{X: +sz.Wi / 2, Y: -dimGap},
+		},
+		{ // H on the right side
+			From:    ms2.Vec{X: sz.Wi / 2, Y: 0},
+			To:      ms2.Vec{X: sz.Wo / 2, Y: sz.H},
+			DimFrom: ms2.Vec{X: side, Y: 0},
+			DimTo:   ms2.Vec{X: side, Y: sz.H},
+		},
 	}
 }
 
-// topLabels annotates the top-down cutaway. The plane is U=X, V=Y at
-// z=H/2 (mid-height for the block, mid-height for the cover). The
-// octagonal cross-section there has width across flats = (Wi+Wo)/2.
-func topLabels(sz V0Size) []svgslice.Label {
+// topDimensions annotates the top-down cutaway with the across-flats
+// width at z=H/2 and (when present) the counterbore diameter at the
+// first screw centre.
+func topDimensions(sz V0Size) []svgslice.Dimension {
 	mid := (sz.Wi + sz.Wo) / 2
-	return []svgslice.Label{
-		{U: 0, V: mid/2 + 1.0, Text: fmt.Sprintf("at z = H/2: %g mm across flats", mid)},
+	const dimGap = 1.5
+	dims := []svgslice.Dimension{
+		{
+			From:    ms2.Vec{X: -mid / 2, Y: mid / 2},
+			To:      ms2.Vec{X: +mid / 2, Y: mid / 2},
+			DimFrom: ms2.Vec{X: -mid / 2, Y: mid/2 + dimGap},
+			DimTo:   ms2.Vec{X: +mid / 2, Y: mid/2 + dimGap},
+		},
 	}
+	// The top-view plane is at z = H/2 (mid-height), well below the
+	// counterbore, so the counterbore itself isn't visible in the
+	// outline. Annotate it as a diameter call-out at the first screw
+	// position with an explicit "Ø…" label.
+	if sz.Counterbore > 0 && len(sz.Holes) > 0 {
+		r := sz.Screw.DHead/2 + sz.Recess
+		c := sz.Holes[0]
+		dims = append(dims, svgslice.Dimension{
+			From:    ms2.Vec{X: c.X - r, Y: c.Y},
+			To:      ms2.Vec{X: c.X + r, Y: c.Y},
+			DimFrom: ms2.Vec{X: c.X - r, Y: c.Y - mid/2 - dimGap},
+			DimTo:   ms2.Vec{X: c.X + r, Y: c.Y - mid/2 - dimGap},
+			Label:   fmt.Sprintf("Ø%.1f mm counterbore", 2*r),
+		})
+	}
+	return dims
 }
 
 func firstOffAxisY(holes []ms2.Vec) (float32, bool) {

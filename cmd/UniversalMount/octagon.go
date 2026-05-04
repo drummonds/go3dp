@@ -45,6 +45,42 @@ func OctagonalFrustum(bld *gsdf.Builder, wInner, wOuter, h float32) (glbuild.Sha
 	return out, nil
 }
 
+// OctagonalPrism builds a regular octagonal prism aligned along Z with
+// across-flats = w, lower face at z=0 and upper face at z=h. Same Z
+// convention as OctagonalFrustum so the two compose with Union/Translate.
+func OctagonalPrism(bld *gsdf.Builder, w, h float32) (glbuild.Shader3D, error) {
+	if w <= 0 || h <= 0 {
+		return nil, errors.New("OctagonalPrism: positive dimensions required")
+	}
+	prism := rectangularPrism(bld, w, h)
+	rotZ := func(s glbuild.Shader3D, rad float32) glbuild.Shader3D {
+		return bld.Rotate(s, rad, ms3.Vec{Z: 1})
+	}
+	out := bld.Intersection(prism, rotZ(prism, float32(math.Pi/4)))
+	out = bld.Intersection(out, rotZ(prism, float32(math.Pi/2)))
+	out = bld.Intersection(out, rotZ(prism, float32(3*math.Pi/4)))
+	// rectangularPrism centres on z=0 (vertices at ±h/2); shift up by h/2.
+	out = bld.Translate(out, 0, 0, h/2)
+	return out, nil
+}
+
+// rectangularPrism builds a prism whose XZ cross-section is the rectangle
+// of width w and height h centred on origin, extruded along world Y. Caller
+// shifts +h/2 in Z to align with OctagonalFrustum's bottom-at-zero convention.
+func rectangularPrism(bld *gsdf.Builder, w, h float32) glbuild.Shader3D {
+	verts := []ms2.Vec{
+		{X: -w / 2, Y: +h / 2},
+		{X: +w / 2, Y: +h / 2},
+		{X: +w / 2, Y: -h / 2},
+		{X: -w / 2, Y: -h / 2},
+	}
+	rect := bld.NewPolygon(verts)
+	extrudeLen := w * 2 // exceeds octagonal diagonal after rotation
+	prism := bld.Extrude(rect, extrudeLen)
+	prism = bld.Rotate(prism, float32(math.Pi/2), ms3.Vec{X: 1})
+	return prism
+}
+
 // trapezoidalPrism builds a prism whose XZ cross-section is the trapezoid
 //
 //	(-wOuter/2, +h/2), (wOuter/2, +h/2), (wInner/2, -h/2), (-wInner/2, -h/2)

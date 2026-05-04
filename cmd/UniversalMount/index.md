@@ -1,3 +1,10 @@
+<style>
+/* SVG cutaways embedded inside .columns layout: scale the rendered SVG
+   to fill its column. The SVG file itself keeps its mm intrinsic size
+   for direct download / DXF round-trip. */
+.columns .column img[src$=".svg"] { width: 100%; height: auto; display: block; }
+</style>
+
 # Universal Mount
 
 A standardised, 3D-printable mounting system from the [go3dp](https://codeberg.org/hum3/go3dp) project. See the [full design document](README.md) for the review of existing designs, the parameter table, and the v0/v1/v2 build plan.
@@ -429,6 +436,24 @@ task v0:stl       # all sizes, STL only
 task v0:3mf       # all sizes, 3MF only
 task v0:svg       # all sizes, SVG cutaways only
 task docs:build   # this page, rendered to docs/index.html
+```
+
+### 3MF mesher selection
+
+3MF output goes through one of three mesher pipelines. The choice is set with `-mesh` on `go run .`; the Taskfile uses the default.
+
+| `-mesh`  | Pipeline                            | When to use                                                           |
+|----------|-------------------------------------|------------------------------------------------------------------------|
+| `merge`  | dual contouring + planar-region merge | **Default.** Smallest files; collapses each flat face to a fan of triangles. Adaptors shrink ~95%, blocks/covers 15–35%. |
+| `dc`     | dual contouring only                | Same triangle count as `merge` before merging — useful to bisect a slicer issue blamed on the merge step. |
+| `octree` | octree + marching cubes             | Original pipeline. Use if a slicer rejects the merged output (potential T-junctions across faces) or to compare. |
+
+Examples:
+
+```
+go run . -size=m -out=3mf                # default: merge
+go run . -size=m -out=3mf -mesh=dc       # dual contouring without merging
+go run . -size=m -out=3mf -mesh=octree   # marching cubes (largest files)
 ```
 
 <script type="importmap">

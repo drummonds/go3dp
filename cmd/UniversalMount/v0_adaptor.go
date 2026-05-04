@@ -17,6 +17,7 @@ type V0AdaptorParams struct {
 	Tolerance       float32 // clearance per face between v0 mount and adaptor cavity, mm
 	WallThickness   float32 // material thickness around the cavity, mm
 	LengthExtension float32 // adaptor length past the v0 footprint along the slide axis, mm
+	CavityLip       float32 // flat lip at the cavity's wall-side entrance (z=0..CavityLip at Wo+2·Tol cross-section), mm
 }
 
 // V0AdaptorPLA is the default preset for FDM PLA.
@@ -24,6 +25,7 @@ var V0AdaptorPLA = V0AdaptorParams{
 	Tolerance:       0.15,
 	WallThickness:   1.5,
 	LengthExtension: 5.0,
+	CavityLip:       0.5,
 }
 
 // V0SlideOn is the first member of the V0 adaptor family: a lateral
@@ -54,43 +56,43 @@ func V0SlideOn(bld *gsdf.Builder, sz V0Size, p V0AdaptorParams) (glbuild.Shader3
 	if p.LengthExtension < 0 {
 		return nil, fmt.Errorf("V0SlideOn: LengthExtension must be non-negative")
 	}
+	if p.CavityLip < 0 {
+		return nil, fmt.Errorf("V0SlideOn: CavityLip must be non-negative")
+	}
 
 	// Cavity dimensions: matches v0 mount + tolerance per face.
 	wic := sz.Wi + 2*p.Tolerance
 	woc := sz.Wo + 2*p.Tolerance
 	houter := sz.H + p.WallThickness
 
-	// 1) Rectangular outer body: x ∈ [-Woc/2, +Woc/2 + Lext],
-	//    Y ∈ ±(Woc/2 + WallThickness), Z ∈ [0, Houter].
-	rectLenX := woc + p.LengthExtension
-	rectWidthY := woc + 2*p.WallThickness
-	rect := bld.NewBox(rectLenX, rectWidthY, houter, 0)
-	rect = bld.Translate(rect, p.LengthExtension/2, 0, houter/2)
+	// 1) Outer body — rectangular plan view, WallThickness uniform on
+	//    the -X, +Y, and -Y faces; +X is the slide-in opening (slot cut
+	//    from the cavity below). Drops the previous chamfered "flange"
+	//    corners now that retention is intended to come from a tongue-
+	//    and-groove against the block (TBD).
+	xLeft := -woc/2 - p.WallThickness
+	xRight := woc/2 + p.LengthExtension
+	yHalf := woc/2 + p.WallThickness
+	outerLenX := xRight - xLeft
+	outerWidthY := 2 * yHalf
+	outer := bld.NewBox(outerLenX, outerWidthY, houter, 0)
+	outer = bld.Translate(outer, (xLeft+xRight)/2, 0, houter/2)
 
-	// 2) Half-octagonal cap on the closed (-X) end. The cap is a full
-	//    octagonal frustum sized as v0 + Tolerance + WallThickness on
-	//    each face, with its +X half cut away. The cut face is then
-	//    butted against the rectangular body at x = -Woc/2.
-	capWi := wic + 2*p.WallThickness
-	capWo := woc + 2*p.WallThickness
-	capFull, err := OctagonalFrustum(bld, capWi, capWo, houter)
-	if err != nil {
-		return nil, fmt.Errorf("V0SlideOn cap: %w", err)
-	}
-	// Slice off everything with x ≥ 0.
-	plusXBox := bld.NewBox(capWo+2, capWo+2, houter+2, 0)
-	plusXBox = bld.Translate(plusXBox, (capWo+2)/2, 0, houter/2)
-	capHalf := bld.Difference(capFull, plusXBox)
-	// Translate the cap so its cut face sits at x = -Woc/2 (matches the
-	// rect's -X edge); the extreme cap corner ends up at x = -(Woc+WallThickness)/2 - Woc/2.
-	capHalf = bld.Translate(capHalf, -woc/2, 0, 0)
-
-	outer := bld.Union(rect, capHalf)
-
-	// 3) Cavity: octagonal frustum at origin, matching v0 + tolerance.
+	// 3) Cavity: octagonal frustum at origin matching v0 + tolerance,
+	//    plus an optional flat lip at the wall-side entrance (z=0..lip)
+	//    at the largest cross-section (Wo+2·Tol). The lip leaves a
+	//    sliding-clearance gap around the v0 mount's narrow end so the
+	//    adaptor doesn't bind on the wall during lateral install.
 	cavity, err := OctagonalFrustum(bld, wic, woc, sz.H)
 	if err != nil {
 		return nil, fmt.Errorf("V0SlideOn cavity: %w", err)
+	}
+	if p.CavityLip > 0 {
+		lip, err := OctagonalPrism(bld, woc, p.CavityLip)
+		if err != nil {
+			return nil, fmt.Errorf("V0SlideOn cavity lip: %w", err)
+		}
+		cavity = bld.Union(cavity, lip)
 	}
 
 	// 4) Slot: a Woc × H rectangular prism extending the cavity from
@@ -110,4 +112,21 @@ func V0SlideOn(bld *gsdf.Builder, sz V0Size, p V0AdaptorParams) (glbuild.Shader3
 // the partBuilder signature used by the CLI.
 func V0SlideOnPLA(bld *gsdf.Builder, sz V0Size) (glbuild.Shader3D, error) {
 	return V0SlideOn(bld, sz, V0AdaptorPLA)
+}
+
+// V0Assembly returns the boolean union of the V0 block and its slide-on
+// adaptor in the assembled position (both centred on origin). Useful as
+// a debugging cutaway: cross-sections show the cavity-vs-block clearance,
+// the wall-side lip gap, the slot opening, and the top wall — all in one
+// SVG. The 3MF/STL of the union is rarely what you want to print.
+func V0Assembly(bld *gsdf.Builder, sz V0Size) (glbuild.Shader3D, error) {
+	block, err := V0Block(bld, sz)
+	if err != nil {
+		return nil, fmt.Errorf("V0Assembly block: %w", err)
+	}
+	adaptor, err := V0SlideOnPLA(bld, sz)
+	if err != nil {
+		return nil, fmt.Errorf("V0Assembly adaptor: %w", err)
+	}
+	return bld.Union(block, adaptor), nil
 }
