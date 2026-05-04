@@ -31,9 +31,20 @@ tasks:
       - go run .
     # silent: true
 
+  docs:diagram:
+    desc: Render process-flow.d2 to SVG (only if the d2 source changed)
+    method: timestamp
+    sources:
+      - 'process-flow.d2'
+    generates:
+      - 'docs/process-flow.svg'
+    cmds:
+      - mkdir -p docs
+      - d2 process-flow.d2 docs/process-flow.svg
+
   docs:build:
     desc: Build the full documentation site to docs/
-    deps: [um:docs:build, fasteners:docs:build]
+    deps: [um:docs:build, fasteners:docs:build, docs:diagram]
     cmds:
       - mkdir -p docs/universal-mount docs/fasteners docs/js
       - cp -r cmd/UniversalMount/docs/. docs/universal-mount/
@@ -41,7 +52,11 @@ tasks:
       - cp web/*.js docs/js/
       - cp -r web/three docs/js/
       - test -f web/favicon.svg && cp web/favicon.svg docs/ || true
+      - cp process-flow.d2 docs/
       - task-plus md2html --file index.md --dst docs --label "go3dp" --no-breadcrumbs
+      - task-plus md2html --file README.md --dst docs --label "go3dp" --no-breadcrumbs
+      - task-plus md2html --file ROADMAP.md --dst docs --label "go3dp" --no-breadcrumbs
+      - task-plus md2html --file process-flow.md --dst docs --label "go3dp" --no-breadcrumbs
 
   docs:fetch-three:
     desc: Download self-hosted Three.js modules into web/three/ (one-time / on update)
